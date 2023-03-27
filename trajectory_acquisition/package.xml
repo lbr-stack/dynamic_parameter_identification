@@ -13,8 +13,8 @@
   <test_depend>python3-pytest</test_depend>
 
   <exec_depend>control_msgs</exec_depend>
-  <exec_depend>lbr_fri_msgs</exec_depend>
   <exec_depend>rclpy</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>trajectory_msgs</exec_depend>
 
   <export>

@@ -1,25 +1,25 @@
 from typing import List
 
+import time
 import rclpy
+from builtin_interfaces.msg import Duration
 from control_msgs.action import FollowJointTrajectory
-from lbr_fri_msgs.msg import LBRState
 from rclpy.action import ActionClient
 from rclpy.node import Node
-from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
-from std_msgs.msg import Float64MultiArray
-
-from rclpy.qos import qos_profile_system_default, qos_profile_sensor_data
 from rclpy.parameter import Parameter
+from rclpy.qos import qos_profile_sensor_data
+from sensor_msgs.msg import JointState
+from trajectory_msgs.msg import JointTrajectoryPoint
 
 
 class TrajectoryAcquisitionNode(Node):
     def __init__(self, node_name: str = "trajectory_acquisition_node") -> None:
         super().__init__(node_name)
-        self.lbr_state_ = None
-        self.lbr_state_sub_ = self.create_subscription(
-            LBRState,
-            "/lbr_state",
-            self.lbr_state_sub_sb_,
+        self.joint_state_ = None
+        self.joint_state_sub_ = self.create_subscription(
+            JointState,
+            "/joint_states",
+            self.joint_state_sub_sb_,
             qos_profile_sensor_data,
         )
 
@@ -37,17 +37,36 @@ class TrajectoryAcquisitionNode(Node):
         self.follow_joint_trajetory_ac_.wait_for_server()
         self.get_logger().info("Done.")
 
-        self.declare_parameter("target_joint_positions", Parameter.Type.DOUBLE_ARRAY)
-        self.target_joint_positions_ = self.get_parameter("target_joint_positions")
+        # self.declare_parameter("target_joint_positions", Parameter.Type.DOUBLE_ARRAY)
+        # self.target_joint_positions_ = self.get_parameter("target_joint_positions")
 
         # print(self.target_joint_positions_)
 
     def execute(self) -> None:
+        while not self.joint_state_:
+            rclpy.spin_once(self)
+            time.sleep(0.1)
 
-        rclpy.spin_until_future_complete(self)
+        dof = len(self.joint_state_.name)
+        goal = FollowJointTrajectory.Goal()
+        goal.trajectory.header.stamp = self.get_clock().now().to_msg()
+        goal.trajectory.joint_names = self.joint_state_.name
+        goal.trajectory.points.append(
+            JointTrajectoryPoint(
+                positions=[0.0] * dof,
+                velocities=[0.0] * dof,
+                accelerations=[0.0] * dof,
+                time_from_start=Duration(
+                    sec=10,
+                    nanosec=0,
+                ),
+            )
+        )
+        future = self.follow_joint_trajetory_ac_.send_goal_async(goal)
+        rclpy.spin_until_future_complete(self, future)
 
-    def lbr_state_sub_sb_(self, lbr_state: LBRState) -> None:
-        self.lbr_state_ = lbr_state
+    def joint_state_sub_sb_(self, joint_state: JointState) -> None:
+        self.joint_state_ = joint_state
 
 
 def main(args: List = None) -> None:
