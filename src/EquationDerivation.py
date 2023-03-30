@@ -17,6 +17,8 @@ from rclpy.node import Node
 
 import pathlib
 
+# import PyKDL as kdl
+
 
 
 class Estimator(Node):
@@ -156,52 +158,63 @@ class Estimator(Node):
             ini = ini_new
 
             # if(i != len(joints_list_r2)-1):
-            tau = ini.T @ iaxisis[i-1]
+            _tau = ini.T @ iaxisis[i-1]
 
-            taus.append(tau)
-            print(tau)
-            
+            taus.append(_tau)
+            # print(_tau)
+
+        
+        tau=cs.vertcat(*[taus[k] for k in range(len(taus)-1,-1,-1)])
+        # print(tau)
 
 
-            # print(joints_list_r2[i])
-            # print(i)
-            # print(len(joints_list_r2)-1)
+        # q = cs.SX.sym('q', Nb, 1)
+        # qd = cs.SX.sym('qd', Nb, 1)
+        # qdd = cs.SX.sym('qdd', Nb, 1)
+        # m = cs.SX.sym('m', 1, Nb+1)
+        # cm = cs.SX.sym('cm',3,Nb+1)
+        # Icm = cs.SX.sym('Icm',3,3*Nb+3)
+        self.dynamics_ = optas.Function('dynamics', [q,qd,qdd,m,cm,Icm], [tau])
+        g_ =  self.dynamics_(q,np.zeros([Nb,1]),np.zeros([Nb,1]),m,cm,Icm)
+        
+        
+        
+        print(g_)
+
+        # sub_dict = {qd: np.zeros([Nb,1]),qdd: np.zeros([Nb,1])}
+        # g_tau = optas.substitute(tau, [qd,qdd],[cs.DM([0.0]*7),cs.DM([0.0]*7)])
+
+        # q_np = np.zeros([Nb,1])
+        # qd_np = np.zeros([Nb,1])
+        # qdd_np = np.zeros([Nb,1])
+        # m_np = np.ones([1,Nb+1])
+        # cm_np = np.ones([3,Nb+1])
+        # Icm_np = np.ones([3,3*Nb+3])
+        # print("output = {0}".format(self.dynamics_(q_np,qd_np,qdd_np,m_np,cm_np,Icm_np)))
+        # print("output2 = {0}".format(g_tau))
 
         
 
+        # self.robot.urdf.get
 
-        
+        # pb.connect(
+        # *[pb.DIRECT],
+        # )
+        # pb.resetSimulation()
+        # gravz = -9.81
+        # pb.setGravity(0, 0, gravz)
 
+        # sampling_freq = 240
+        # time_step = 1./float(sampling_freq)
+        # pb.setTimeStep(time_step)
+        # self.id = pb.loadURDF(
+        #         path,
+        #         basePosition=[0, 0, 0],
+        #     )
+        # print("output1 = {0}".format(pb.calculateInverseDynamics(self.id,q_np,qd_np,qdd_np)))
 
-
-
-
-
-        # for i in range(len(joints_list_r)):
-        #     # print(joints_list_r[i])
-        #     pRi=rpy2r(axiss[i]*q[i]).T
-        #     iRp = rpy2r(axiss[i]*q[i]) @ RL
-        #     omi = iRp @ oms[i] + axiss[i]* qd[i]
-        #     omDi = iRp @ omDs[i] + skew(iRp @ oms[i]) @ (axiss[i]*qd[i]) + axiss[i]*qdd[i]
-        #     # print("skew(omDs[i]) = {0}".format(skew(omDs[i]).size()))
-        #     vDi = iRp @ (vDs[i] + skew(omDs[i]) @ xyzs[i])
-        #     vDi = iRp @ (vDs[i] + skew(omDs[i]) @ xyzs[i]
-        #                  + skew(oms[i]) @ skew(oms[i])@ xyzs[i])
             
-        #     fi = m[i] * (vDi + skew(omDi)@ cm[:,i]+ skew(omi)@skew(omi)@cm[:,i])
-        #     ni = Icm[:,i*3:i*3+3] @ omDi
-        #     + skew(omi) @ Icm[:,i*3:i*3+3] @ omi
-        #     + skew(cm[:,i]) @ fi
-            
-        #     RL = iRp
-            
-        #     print(ni)
 
-        #     oms.append(omi)
-        #     omDs.append(omDi)
-        #     vDs.append(vDi)
-        #     fs.append(fi)
-        #     ns.append(ni)
 
 
 
