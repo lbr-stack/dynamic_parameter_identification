@@ -17,7 +17,7 @@ from rclpy.node import Node
 
 import pathlib
 
-# import PyKDL as kdl
+import PyKDL as kdl
 
 
 
@@ -76,7 +76,10 @@ class Estimator(Node):
         q = cs.SX.sym('q', Nb, 1)
         qd = cs.SX.sym('qd', Nb, 1)
         qdd = cs.SX.sym('qdd', Nb, 1)
+
+        # mi start from link 1(not base_link) to end-effector link
         m = cs.SX.sym('m', 1, Nb+1)
+        # cmi start from link 1(not base_link) to end-effector link
         cm = cs.SX.sym('cm',3,Nb+1)
         Icm = cs.SX.sym('Icm',3,3*Nb+3)
         fs = [cs.DM([0.0,0.0,0.0])]
@@ -99,6 +102,7 @@ class Estimator(Node):
         # xyzs[i]: i-1 to i link
         joints_list_r1 = joints_list_r
         for i in range(len(joints_list_r1)):
+            print("index i ={0}".format(i))
             if(i!=len(joints_list_r1)-1):
                 print(joints_list_r1[i])
                 iRp = (rpy2r(rpys[i]) @ angvec2r(q[i], axiss[i])).T
@@ -161,11 +165,12 @@ class Estimator(Node):
             _tau = ini.T @ iaxisis[i-1]
 
             taus.append(_tau)
-            # print(_tau)
+            print(iaxisis[i-1])
+            print(i-1)
 
         
-        tau=cs.vertcat(*[taus[k] for k in range(len(taus)-1,-1,-1)])
-        # print(tau)
+        tau=cs.vertcat(*[taus[k] for k in range(len(taus)-2,-1,-1)])
+        print(tau.size())
 
 
         # q = cs.SX.sym('q', Nb, 1)
@@ -176,10 +181,21 @@ class Estimator(Node):
         # Icm = cs.SX.sym('Icm',3,3*Nb+3)
         self.dynamics_ = optas.Function('dynamics', [q,qd,qdd,m,cm,Icm], [tau])
         g_ =  self.dynamics_(q,np.zeros([Nb,1]),np.zeros([Nb,1]),m,cm,Icm)
+        g1_ =  self.dynamics_(q,np.zeros([Nb,1]),np.zeros([Nb,1]),m,cm,np.zeros([3,3*Nb+3]))
+        g2_ =  self.dynamics_(q,np.zeros([Nb,1]),np.zeros([Nb,1]),m,cm,np.ones([3,3*Nb+3]))
         
+        self.gra = optas.Function('gravity', [q,m,cm], [g1_])
         
+
+        q_np = np.array([1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+        g = self.gra(q_np,np.ones([1,Nb+1]),0.1*np.zeros([3,Nb+1]))
         
-        print(g_)
+        print(g1_)
+        print(g2_)
+
+        print(g)
+
+        # assert()
 
         # sub_dict = {qd: np.zeros([Nb,1]),qdd: np.zeros([Nb,1])}
         # g_tau = optas.substitute(tau, [qd,qdd],[cs.DM([0.0]*7),cs.DM([0.0]*7)])
