@@ -199,7 +199,12 @@ class Estimator(Node):
 
         massesCenter = [link.inertial.origin.xyz for link in robot.links if link.inertial is not None]#+[[0.0,0.0,0.0]]
         self.massesCenter_np = np.array(massesCenter[1:]).T
+        Inertia = [np.mat(link.inertial.inertia.to_matrix()) for link in robot.links if link.inertial is not None]
+        
+        self.Inertia_np = np.hstack(tuple(Inertia[1:]))
         print("massesCenter = {0}".format(self.massesCenter_np))
+        print("Inertia = {0}".format(self.Inertia_np))
+        # print("Inertia = {0} , {1},{2}".format(np.size(self.Inertia_np,0),np.size(self.Inertia_np,1),np.size(self.Inertia_np,2)))
 
 
         
@@ -250,17 +255,19 @@ class Estimator(Node):
         
     def timer_cb_(self) -> None:
         q_np = np.array([1.0, self.iter+3.14159/2, 1.0, 1.0, 0.0, 1.0, 0.0])
-        qd_np = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+        qd_np = np.array([1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+        qdd_np = np.zeros(self.Nb)
         self.iter += 3.1415926535
         for i in range(self.Nb):
             # print("ccc = {0}".format(i))
             pb.resetJointState(self.id, i, q_np[i], qd_np[i])
 
-        tau_ext = np.array(pb.calculateInverseDynamics(self.id, q_np.tolist(), qd_np.tolist(), np.zeros(self.Nb).tolist()))
-        g = self.gra(q_np,self.masses_np,self.massesCenter_np)
+        tau_ext = np.array(pb.calculateInverseDynamics(self.id, q_np.tolist(), qd_np.tolist(), qdd_np.tolist()))
+        # g = self.gra(q_np,self.masses_np,self.massesCenter_np)
+        t = self.dynamics_(q_np,qd_np,qdd_np,self.masses_np,self.massesCenter_np,self.Inertia_np)
         
-        print("tau_ext = {0}\n tau_g = {1}".format(tau_ext,g))
-        print("\n error = {0}\n ".format(tau_ext-g))
+        print("tau_ext = {0}\n tau_g = {1}".format(tau_ext,t))
+        print("\n error = {0}\n ".format(tau_ext-t))
         
 
 
