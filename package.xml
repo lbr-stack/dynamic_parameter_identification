@@ -17,6 +17,8 @@
   <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>lbr_fri_msgs</exec_depend>
   <exec_depend>rclpy</exec_depend>
+  <exec_depend>kdl_parser</exec_depend>
+
 
   <export>
     <build_type>ament_cmake</build_type>
