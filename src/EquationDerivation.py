@@ -154,8 +154,8 @@ class Estimator(Node):
         joints_list_r2 = joints_list_r
 
         pRi = rpy2r(rpys[-1])
-        ifi = pRi @ fs[-1]#cs.DM([0.0,0.0,0.0])
-        ini = #cs.DM([0.0,0.0,0.0])
+        ifi = fs[-1]#cs.DM([0.0,0.0,0.0])
+        ini = ns[-1] + skew(cm[:,-1]) @ fs[-1]#cs.DM([0.0,0.0,0.0])
         taus = []
         # pRi = I3()
 
@@ -168,7 +168,7 @@ class Estimator(Node):
             elif(i == len(joints_list_r2)-1):
                 pRi = rpy2r(rpys[i])
             else:
-                pRi = I3()
+                pRi = rpy2r(rpys[i])
             
             # if(i<)
             
@@ -177,8 +177,8 @@ class Estimator(Node):
             # ini = ini_new
             #skew(cm[:,i]+xyzs[i]) 
             # ini = ns[i+1] + pRi @ ini +skew(cm[:,i]+xyzs[i]) @ fs[i+1] +pRi @skew(pRi.T @xyzs[i]) @ ifi
-            ini = ns[i+1] + pRi @ ini +skew(cm[:,i]) @ fs[i+1] +skew(xyzs[i]) @ pRi @ifi
-            ifi= pRi @ ifi + fs[i+1]
+            ini = ns[i] + pRi @ ini +skew(cm[:,i]) @ fs[i] +skew(xyzs[i]) @ pRi @ifi
+            ifi= pRi @ ifi + fs[i]
             pRi = rpy2r(rpys[i-1]) @ angvec2r(q[i-1], axes[i-1])
             # if(i != len(joints_list_r2)-1):
             _tau = ini.T @pRi.T @ axes[i-1]
