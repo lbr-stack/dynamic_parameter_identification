@@ -115,8 +115,9 @@ class Estimator(Node):
                 omi = iRp @ oms[i] + iaxisi* qd[i]
                 omDi = iRp @ omDs[i] +  iRp @skew(oms[i]) @ (iaxisi*qd[i]) + iaxisi*qdd[i]
                 # print("skew(omDs[i]) = {0}".format(skew(omDs[i]).size()))
-                vDi = iRp @ vDs[i] + skew(omDi) @ xyzs[i]+ skew(omi) @ skew(omi)@ xyzs[i]
-                
+                # vDi = iRp @ vDs[i] + skew(omDi) @ xyzs[i]+ skew(omi) @ skew(omi)@ xyzs[i]
+                vDi = iRp @ (vDs[i] + skew(omDs[i]) @ xyzs[i]
+                            + skew(oms[i]) @ skew(oms[i])@ xyzs[i])
                 fi = m[i] * (vDi + skew(omDi)@ cm[:,i]+ skew(omi)@(skew(omi)@cm[:,i]))
                 ni = Icm[:,i*3:i*3+3] @ omDi
                 + skew(omi) @ Icm[:,i*3:i*3+3] @ omi
@@ -124,15 +125,15 @@ class Estimator(Node):
             else:
                 print(joints_list_r1[i])
                 iRp = rpy2r(rpys[i]) 
-                iaxisi = iRp @ axes[i]
+                # iaxisi = iRp @ axes[i]
                 omi = iRp @ oms[i]
                 omDi = iRp @ omDs[i]
                 # print("skew(omDs[i]) = {0}".format(skew(omDs[i]).size()))
-                vDi = iRp @ vDs[i] + skew(omDi) @ xyzs[i]+ skew(omi) @ skew(omi)@ xyzs[i]
-                # vDi = iRp @ (vDs[i] + skew(omDs[i]) @ xyzs[i]
-                #             + skew(oms[i]) @ skew(oms[i])@ xyzs[i])
+                # vDi = iRp @ vDs[i] + skew(omDi) @ xyzs[i]+ skew(omi) @ skew(omi)@ xyzs[i]
+                vDi = iRp @ (vDs[i] + skew(omDs[i]) @ xyzs[i]
+                            + skew(oms[i]) @ skew(oms[i])@ xyzs[i])
                 
-                fi = m[i] * (vDi + skew(omDi)@ cm[:,i]+ skew(omi)@skew(omi)@cm[:,i])
+                fi = m[i] * (vDi + skew(omDi)@ cm[:,i]+ skew(omi)@(skew(omi)@cm[:,i]))
                 ni = Icm[:,i*3:i*3+3] @ omDi
                 + skew(omi) @ Icm[:,i*3:i*3+3] @ omi
                 #+ skew(cm[:,i]) @ fi
@@ -177,7 +178,7 @@ class Estimator(Node):
             # ini = ini_new
             #skew(cm[:,i]+xyzs[i]) 
             # ini = ns[i+1] + pRi @ ini +skew(cm[:,i]+xyzs[i]) @ fs[i+1] +pRi @skew(pRi.T @xyzs[i]) @ ifi
-            ini = ns[i] + pRi @ ini +skew(cm[:,i]) @ fs[i] +skew(xyzs[i]) @ pRi @ifi
+            ini = ns[i] + pRi @ ini +skew(cm[:,i-1]) @ fs[i] +skew(xyzs[i]) @ pRi @ifi
             ifi= pRi @ ifi + fs[i]
             pRi = rpy2r(rpys[i-1]) @ angvec2r(q[i-1], axes[i-1])
             # if(i != len(joints_list_r2)-1):
@@ -282,7 +283,7 @@ class Estimator(Node):
 
         
     def timer_cb_(self) -> None:
-        q_np = np.array([1.0, self.iter+3.14159/2, 0.0, 0.0, 0.0, self.iter+3.14159/2, 0.0])
+        q_np = np.array([1.0, self.iter+3.14159/2, 1.0, 1.0, 0.0, 1.0, 0.0])
         qd_np = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
         self.iter += 3.1415926535
         for i in range(self.Nb):
