@@ -13,6 +13,7 @@ find_package(lbr_fri_msgs REQUIRED)
 install(
   PROGRAMS
     src/EquationDerivation.py
+    src/EquationDerivationRNEA.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
