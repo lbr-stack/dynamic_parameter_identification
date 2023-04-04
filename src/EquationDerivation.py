@@ -282,7 +282,7 @@ class Estimator(Node):
 
         
     def timer_cb_(self) -> None:
-        q_np = np.array([1.0, self.iter+1.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+        q_np = np.array([1.0, self.iter+3.14159/2, 0.0, 0.0, 0.0, self.iter+3.14159/2, 0.0])
         qd_np = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
         self.iter += 3.1415926535
         for i in range(self.Nb):
