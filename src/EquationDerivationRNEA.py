@@ -180,8 +180,8 @@ class Estimator(Node):
 
 
         
-        tau=cs.vertcat(*[taus[k] for k in range(len(taus)-1,-1,-1)])
-        print(tau.size())
+        tau_=cs.vertcat(*[taus[k] for k in range(len(taus)-1,-1,-1)])
+        print(tau_.size())
         urdf_string_ = xacro.process(path)
         robot = urdf.URDF.from_xml_string(urdf_string_)
         print([joint.name for joint in robot.joints if joint.origin is not None])
@@ -206,16 +206,132 @@ class Estimator(Node):
         print("Inertia = {0}".format(self.Inertia_np))
         # print("Inertia = {0} , {1},{2}".format(np.size(self.Inertia_np,0),np.size(self.Inertia_np,1),np.size(self.Inertia_np,2)))
 
-
+        # tau_ = tau
         
-        self.dynamics_ = optas.Function('dynamics', [q,qd,qdd,m,cm,Icm], [tau])
+        self.dynamics_ = optas.Function('dynamics', [q,qd,qdd,m,cm,Icm], [tau_])
+        # self.dynamics_i = optas.Function('dynamics1', [m,cm,Icm], [tau_])
         g_ =  self.dynamics_(q,np.zeros([Nb,1]),np.zeros([Nb,1]),m,cm,Icm)
-        g1_ =  self.dynamics_(q,np.zeros([Nb,1]),np.zeros([Nb,1]),m,cm,np.zeros([3,3*Nb+3]))
+        g1 =  self.dynamics_(q,np.zeros([Nb,1]),np.zeros([Nb,1]),m,cm,np.zeros([3,3*Nb+3]))
+        g1_ = optas.simplify(g1)
         # g2_ =  self.dynamics_(q,np.zeros([Nb,1]),np.zeros([Nb,1]),m,cm,np.ones([3,3*Nb+3]))
         
         self.gra = optas.Function('gravity', [q,m,cm], [g1_])
+        # print("g1_ = {0}".format(g1_[0]))
+
+        """
+        Get Inertia parameters set
+        """
+        dynamicsF_ = self.dynamics_(q,np.zeros([Nb,1]),np.zeros([Nb,1]),
+                                    np.ones([Nb+1,1]),np.zeros([3,Nb+1]),np.zeros([3,3*Nb+3]))
+
+
+        # print("dynamicsF_ = {0}".format(dynamicsF_))
+
 
         self.lbr_command_timer_ = self.create_timer(self.dt_, self.timer_cb_)
+        
+        # _numK = 10
+        # for every torque
+        Y = []
+        
+        for i in range(tau_.shape[0]):
+            # for every link
+            # Y_line = []
+            Y_line = []
+            # PI_a = []
+            for j in range(m.shape[1]):
+                # for every parameters
+                # pi_temp = [m[j],
+                #            m[j]*cm[0,j],
+                #            m[j]*cm[1,j],
+                #            m[j]*cm[2,j],
+                #            Icm[0,0+3*j] + m[j]*(cm[1,j]*cm[1,j]+cm[2,j]*cm[2,j]),  # XXi
+                #            Icm[0,1+3*j] - m[j]*(cm[0,j]*cm[1,j]),  # XYi
+                #            Icm[0,2+3*j] - m[j]*(cm[0,j]*cm[2,j]),  # XZi
+                #            Icm[1,1+3*j] + m[j]*(cm[0,j]*cm[0,j]+cm[2,j]*cm[2,j]),  # YYi
+                #            Icm[1,2+3*j] - m[j]*(cm[1,j]*cm[2,j]),  # YZi
+                #            Icm[2,2+3*j] + m[j]*(cm[0,j]*cm[0,j]+cm[1,j]*cm[1,j])] # ZZi
+                # PI_a.append(pi_temp)
+                ## 1. get mass
+                m_indu = np.zeros([m.shape[1],m.shape[0]])
+                cm_indu = np.zeros([3,Nb+1])#np.zeros([cm.shape[1],cm.shape[0]])
+                Icm_indu = np.zeros([3,3*Nb+3])#np.zeros([Icm.shape[1],Icm.shape[0]])
+                # print(*m.shape)
+                m_indu[j] = 1.0
+                print(m_indu)
+
+                output = self.dynamics_(q,qd,qdd,m_indu,cm_indu,Icm_indu)[i]
+                Y_line.append(output)
+
+
+                ## 2. get cmx
+                output1 = self.dynamics_(q,qd,qdd,m_indu,cm,Icm_indu)[i]-output
+                for k in range(3):
+                    output_cm = optas.jacobian(output1,cm[k,j])
+                    output_cm1 = optas.substitute(output_cm,cm,cm_indu)
+                    Y_line.append(output_cm1)
+
+                ## 3.get Icm
+                output2 = self.dynamics_(q,qd,qdd,m_indu,cm_indu,Icm)[i]-output
+                for k in range(3):
+                    for l in range(k,3,1):
+                        output_Icm = optas.jacobian(output2,Icm[k,l+3*j])
+                        Y_line.append(output_Icm)
+
+                # sx_lst = optas.horzcat(*Y_seg)
+                # Y_line
+            sx_lst = optas.horzcat(*Y_line)
+            Y.append(sx_lst)
+            # print("Y_line shape = {0}, {1}".format(Y_line[0].shape[0],Y_line[0].shape[1]))
+            # print("sx_lst shape = {0}, {1}".format(sx_lst.shape[0],sx_lst.shape[1]))
+
+        Y_mat = optas.vertcat(*Y)
+        # print(Y_mat)
+        print("Y_mat shape = {0}, {1}".format(Y_mat.shape[0],Y_mat.shape[1]))
+        self.Ymat = optas.Function('Dynamic_Ymat',[q,qd,qdd],[Y_mat])
+
+        PI_a = []
+        for j in range(m.shape[1]):
+            # for every parameters
+            pi_temp = [m[j],
+                        m[j]*cm[0,j],
+                        m[j]*cm[1,j],
+                        m[j]*cm[2,j],
+                        Icm[0,0+3*j] + m[j]*(cm[1,j]*cm[1,j]+cm[2,j]*cm[2,j]),  # XXi
+                        Icm[0,1+3*j] - m[j]*(cm[0,j]*cm[1,j]),  # XYi
+                        Icm[0,2+3*j] - m[j]*(cm[0,j]*cm[2,j]),  # XZi
+                        Icm[1,1+3*j] + m[j]*(cm[0,j]*cm[0,j]+cm[2,j]*cm[2,j]),  # YYi
+                        Icm[1,2+3*j] - m[j]*(cm[1,j]*cm[2,j]),  # YZi
+                        Icm[2,2+3*j] + m[j]*(cm[0,j]*cm[0,j]+cm[1,j]*cm[1,j])] # ZZi
+            PI_a.append(optas.vertcat(*pi_temp))
+
+        PI_vecter = optas.vertcat(*PI_a)
+        print("PI_vecter shape = {0}, {1}".format(PI_vecter.shape[0],PI_vecter.shape[1]))
+        self.PIvector = optas.Function('Dynamic_PIvector',[m,cm,Icm],[PI_vecter])
+        
+
+
+
+                
+
+
+            
+
+                # output_cmx_2 = optas.jacobian(output_cmx,cm[0,j])/2
+
+
+                
+                # output = optas.jacobian(tau_[i],pi_temp[0])
+                # print("output = {0}".format(output))
+                # print(tau_.shape[0])
+                # print(m.shape[1])
+                
+                # for k in range(len(pi_temp)):
+                #     print(pi_temp[k])
+                #     output = optas.jacobian(tau_[i],pi_temp[k])
+                #     print(output)
+
+
 
 
         '''
@@ -254,8 +370,8 @@ class Estimator(Node):
 
         
     def timer_cb_(self) -> None:
-        q_np = np.array([1.0, self.iter+3.14159/2, 1.0, 1.0, 0.0, 1.0, 0.0])
-        qd_np = np.array([1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+        q_np = np.array([1.0, self.iter+3.14159/2, 1.0, 1.0, 0.0, 1.0, 3.0])
+        qd_np = np.array([10.0, 9.0, 1.0, 2.0, 3.0, 5.0, 2.0])
         qdd_np = np.zeros(self.Nb)
         self.iter += 3.1415926535
         for i in range(self.Nb):
@@ -263,11 +379,21 @@ class Estimator(Node):
             pb.resetJointState(self.id, i, q_np[i], qd_np[i])
 
         tau_ext = np.array(pb.calculateInverseDynamics(self.id, q_np.tolist(), qd_np.tolist(), qdd_np.tolist()))
-        # g = self.gra(q_np,self.masses_np,self.massesCenter_np)
+        # t = self.gra(q_np,self.masses_np,self.massesCenter_np)
         t = self.dynamics_(q_np,qd_np,qdd_np,self.masses_np,self.massesCenter_np,self.Inertia_np)
         
+
+        tt = self.Ymat(q_np,qd_np,qdd_np) @ self.PIvector(self.masses_np,self.massesCenter_np,self.Inertia_np)
+
         print("tau_ext = {0}\n tau_g = {1}".format(tau_ext,t))
         print("\n error = {0}\n ".format(tau_ext-t))
+
+        print("tau_ext1 = {0}\n tau_g1 = {1}".format(tau_ext,tt))
+        print("\n error1 = {0}\n ".format(tau_ext-tt))
+
+
+
+        # print("Y_mat = {0}\n ".format(self.Ymat(q_np,qd_np,qdd_np)))
         
 
 
