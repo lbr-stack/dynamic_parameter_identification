@@ -124,20 +124,21 @@ class Estimator(Node):
         """
         joints_list_r1 = joints_list_r
         for i in range(len(joints_list_r1)):
-            
+            print("link p({0}) to i{1}".format(i,i+1))
             if(i!=len(joints_list_r1)-1):
                 # print(joints_list_r1)
                 iRp = (rpy2r(rpys[i]) @ angvec2r(q[i], axes[i])).T
                 iaxisi = iRp @ axes[i]
                 omi = iRp @ oms[i] + iaxisi* qd[i]
-                omDi = iRp @ omDs[i] +  iRp @skew(oms[i]) @ (iaxisi*qd[i]) + iaxisi*qdd[i]
+                omDi = iRp @ omDs[i] +  skew(iRp @oms[i]) @ (iaxisi*qd[i]) + iaxisi*qdd[i]
             else:
-                iRp = rpy2r(rpys[i]) 
+                iRp = rpy2r(rpys[i]).T
                 omi = iRp @ oms[i]
                 omDi = iRp @ omDs[i]
 
-            vDi = iRp @ (vDs[i] + skew(omDs[i]) @ xyzs[i]
-                        + skew(oms[i]) @ skew(oms[i])@ xyzs[i])
+            vDi = iRp @ (vDs[i] 
+                         + skew(omDs[i]) @ xyzs[i]
+                        + skew(oms[i]) @ (skew(oms[i])@ xyzs[i]))
             
             fi = m[i] * (vDi + skew(omDi)@ cm[:,i]+ skew(omi)@(skew(omi)@cm[:,i]))
             ni = Icm[:,i*3:i*3+3] @ omDi + skew(omi) @ Icm[:,i*3:i*3+3] @ omi
@@ -241,24 +242,13 @@ class Estimator(Node):
             # PI_a = []
             for j in range(m.shape[1]):
                 # for every parameters
-                # pi_temp = [m[j],
-                #            m[j]*cm[0,j],
-                #            m[j]*cm[1,j],
-                #            m[j]*cm[2,j],
-                #            Icm[0,0+3*j] + m[j]*(cm[1,j]*cm[1,j]+cm[2,j]*cm[2,j]),  # XXi
-                #            Icm[0,1+3*j] - m[j]*(cm[0,j]*cm[1,j]),  # XYi
-                #            Icm[0,2+3*j] - m[j]*(cm[0,j]*cm[2,j]),  # XZi
-                #            Icm[1,1+3*j] + m[j]*(cm[0,j]*cm[0,j]+cm[2,j]*cm[2,j]),  # YYi
-                #            Icm[1,2+3*j] - m[j]*(cm[1,j]*cm[2,j]),  # YZi
-                #            Icm[2,2+3*j] + m[j]*(cm[0,j]*cm[0,j]+cm[1,j]*cm[1,j])] # ZZi
-                # PI_a.append(pi_temp)
                 ## 1. get mass
                 m_indu = np.zeros([m.shape[1],m.shape[0]])
                 cm_indu = np.zeros([3,Nb+1])#np.zeros([cm.shape[1],cm.shape[0]])
                 Icm_indu = np.zeros([3,3*Nb+3])#np.zeros([Icm.shape[1],Icm.shape[0]])
                 # print(*m.shape)
                 m_indu[j] = 1.0
-                print(m_indu)
+                # print(m_indu)
 
                 output = self.dynamics_(q,qd,qdd,m_indu,cm_indu,Icm_indu)[i]
                 Y_line.append(output)
@@ -311,29 +301,6 @@ class Estimator(Node):
         
 
 
-
-                
-
-
-            
-
-                # output_cmx_2 = optas.jacobian(output_cmx,cm[0,j])/2
-
-
-                
-                # output = optas.jacobian(tau_[i],pi_temp[0])
-                # print("output = {0}".format(output))
-                # print(tau_.shape[0])
-                # print(m.shape[1])
-                
-                # for k in range(len(pi_temp)):
-                #     print(pi_temp[k])
-                #     output = optas.jacobian(tau_[i],pi_temp[k])
-                #     print(output)
-
-
-
-
         '''
         Setup PyBullet for checking RNEA
         '''
@@ -370,20 +337,25 @@ class Estimator(Node):
 
         
     def timer_cb_(self) -> None:
-        q_np = np.array([1.0, self.iter+3.14159/2, 1.0, 1.0, 0.0, 1.0, 3.0])
-        qd_np = np.array([10.0, 9.0, 1.0, 2.0, 3.0, 5.0, 2.0])
-        qdd_np = np.zeros(self.Nb)
+        q_np = np.array([1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0])
+        qd_np = np.array([10.0, 10.0, 12.0, 10.0, 12.0, 10.0, 10.0])
+        qdd_np = np.array([10.0, 10.0, 12.0, 10.0, 12.0, 10.0, 10.0])
         self.iter += 3.1415926535
         for i in range(self.Nb):
             # print("ccc = {0}".format(i))
             pb.resetJointState(self.id, i, q_np[i], qd_np[i])
 
         tau_ext = np.array(pb.calculateInverseDynamics(self.id, q_np.tolist(), qd_np.tolist(), qdd_np.tolist()))
+        print("self.Inertia_np = {0}".format(self.Inertia_np[:,0:3]))
+        print("self.massesCenter_np = {0}".format(self.massesCenter_np[:,0:3]))
+        
         # t = self.gra(q_np,self.masses_np,self.massesCenter_np)
         t = self.dynamics_(q_np,qd_np,qdd_np,self.masses_np,self.massesCenter_np,self.Inertia_np)
         
 
         tt = self.Ymat(q_np,qd_np,qdd_np) @ self.PIvector(self.masses_np,self.massesCenter_np,self.Inertia_np)
+
+        # print()
 
         print("tau_ext = {0}\n tau_g = {1}".format(tau_ext,t))
         print("\n error = {0}\n ".format(tau_ext-t))
