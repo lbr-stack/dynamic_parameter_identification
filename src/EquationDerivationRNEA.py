@@ -19,6 +19,48 @@ import pathlib
 
 import urdf_parser_py.urdf as urdf
 
+def find_dyn_parm_deps(dof, parm_num, regressor_func):
+    '''
+    Find dynamic parameter dependencies (i.e., regressor column dependencies).
+    '''
+
+    samples = 10000
+    round = 10
+
+    pi = np.pi
+
+    Z = np.zeros((dof * samples, parm_num))
+
+    for i in range(samples):
+        q = [float(np.random.random() * 2.0 * pi - pi) for j in range(dof)]
+        dq = [float(np.random.random() * 2.0 * pi - pi) for j in range(dof)]
+        ddq = [float(np.random.random() * 2.0 * pi - pi)
+            for j in range(dof)]
+        Z[i * dof: i * dof + dof, :] = np.matrix(
+            regressor_func(q, dq, ddq)).reshape(dof, parm_num)
+
+    R1_diag = np.linalg.qr(Z, mode='economic').diagonal().round(round)
+    dbi = []
+    ddi = []
+    for i, e in enumerate(R1_diag):
+        if e != 0:
+            dbi.append(i)
+        else:
+            ddi.append(i)
+    dbn = len(dbi)
+
+    P = np.mat(np.eye(parm_num))[:, dbi + ddi]
+    Pb = P[:, :dbn]
+    Pd = P[:, dbn:]
+
+    Rbd1 = np.mat(np.linalg.qr(Z * P, mode='r'))
+    Rb1 = Rbd1[:dbn, :dbn]
+    Rd1 = Rbd1[:dbn, dbn:]
+
+    Kd = np.mat((np.linalg.inv(Rb1) * Rd1).round(round))
+
+    return Pb, Pd, Kd
+
 
 
 class Estimator(Node):
@@ -141,8 +183,7 @@ class Estimator(Node):
                         + skew(oms[i]) @ (skew(oms[i])@ xyzs[i]))
             
             fi = m[i] * (vDi + skew(omDi)@ cm[:,i]+ skew(omi)@(skew(omi)@cm[:,i]))
-            ni = Icm[:,i*3:i*3+3] @ omDi + skew(omi) @ Icm[:,i*3:i*3+3] @ omi
-
+            ni = Icm[:,i*3:i*3+3] @ omDi + skew(omi) @ Icm[:,i*3:i*3+3] @ omi #+ skew(cm[:,i]) @ fi
             
 
             oms.append(omi)
@@ -156,15 +197,18 @@ class Estimator(Node):
         $$ Backward part of RNEA $$
         """
 
-        pRi = rpy2r(rpys[-1])
+        # pRi = rpy2r(rpys[-1])
         ifi = fs[-1]#cs.DM([0.0,0.0,0.0])
         ini = ns[-1] + skew(cm[:,-1]) @ fs[-1]#cs.DM([0.0,0.0,0.0])
+        # ifi = cs.DM([0.0,0.0,0.0])
+        # ini = cs.DM([0.0,0.0,0.0])
         taus = []
 
-
+        # print("Backward: fs[i+1] {0}".format(len(fs)))
         for i in range(len(joints_list_r)-1,0,-1):
 
-            print("index = {0}".format(i))
+            print("Backward: link i({0}) to p{1}".format(i+1,i))
+            # print("Backward: fs[i+1]".format(fs[i+1]))
             if(i < len(joints_list_r)-1):
                 pRi = rpy2r(rpys[i]) @ angvec2r(q[i], axes[i])
             elif(i == len(joints_list_r)-1):
@@ -334,12 +378,13 @@ class Estimator(Node):
         )
         self.iter = 0.0
 
+    
 
         
     def timer_cb_(self) -> None:
         q_np = np.array([1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0])
-        qd_np = np.array([10.0, 10.0, 12.0, 10.0, 12.0, 10.0, 10.0])
-        qdd_np = np.array([10.0, 10.0, 12.0, 10.0, 12.0, 10.0, 10.0])
+        qd_np = np.array([01.1, 01.1, 02.0, 1.0, 1.0, 1.0, 1.0])
+        qdd_np = np.array([1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0])
         self.iter += 3.1415926535
         for i in range(self.Nb):
             # print("ccc = {0}".format(i))
@@ -362,6 +407,19 @@ class Estimator(Node):
 
         print("tau_ext1 = {0}\n tau_g1 = {1}".format(tau_ext,tt))
         print("\n error1 = {0}\n ".format(tau_ext-tt))
+
+        Pb, Pd, Kd =find_dyn_parm_deps(7,80,self.Ymat)
+        K = Pb.T +Kd @Pd.T
+
+        # print("K = {0}".format(K))
+        # print("beta = {0}".format(K @ self.PIvector(self.masses_np,self.massesCenter_np,self.Inertia_np)))
+        ttt = self.Ymat(q_np,qd_np,qdd_np) @Pb @ K @ self.PIvector(self.masses_np,self.massesCenter_np,self.Inertia_np)
+        print("error2 = {0}\n".format(tau_ext-ttt))
+
+        # Y = self.Ymat(q_np,qd_np,qdd_np)
+        # Q, R = optas.qr(Y)
+        # print("Q = {0}".format(Q))
+        # print("R = {0}".format(R))
 
 
 
