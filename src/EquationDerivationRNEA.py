@@ -244,11 +244,12 @@ class Estimator(Node):
 
         massesCenter = [link.inertial.origin.xyz for link in robot.links if link.inertial is not None]#+[[0.0,0.0,0.0]]
         self.massesCenter_np = np.array(massesCenter[1:]).T
-        Inertia = [np.mat(link.inertial.inertia.to_matrix()) for link in robot.links if link.inertial is not None]
-        
+        # Inertia = [np.mat(link.inertial.inertia.to_matrix()) for link in robot.links if link.inertial is not None]
+        Inertia = [link.inertial.inertia.to_matrix() for link in robot.links if link.inertial is not None]
+
         self.Inertia_np = np.hstack(tuple(Inertia[1:]))
-        print("massesCenter = {0}".format(self.massesCenter_np))
-        print("Inertia = {0}".format(self.Inertia_np))
+        # print("massesCenter = {0}".format(self.massesCenter_np))
+        # print("Inertia = {0}".format(self.Inertia_np))
         # print("Inertia = {0} , {1},{2}".format(np.size(self.Inertia_np,0),np.size(self.Inertia_np,1),np.size(self.Inertia_np,2)))
 
         # tau_ = tau
@@ -415,6 +416,10 @@ class Estimator(Node):
         # print("beta = {0}".format(K @ self.PIvector(self.masses_np,self.massesCenter_np,self.Inertia_np)))
         ttt = self.Ymat(q_np,qd_np,qdd_np) @Pb @ K @ self.PIvector(self.masses_np,self.massesCenter_np,self.Inertia_np)
         print("error2 = {0}\n".format(tau_ext-ttt))
+
+        tttt = self.robot.computeRNEA(q_np,qd_np,qdd_np,np.zeros([3,1]),np.zeros([3,1]))
+
+        print("error3= {0}\n".format(tau_ext-tttt))
 
         # Y = self.Ymat(q_np,qd_np,qdd_np)
         # Q, R = optas.qr(Y)
