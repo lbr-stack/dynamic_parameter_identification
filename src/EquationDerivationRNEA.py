@@ -351,27 +351,28 @@ class Estimator(Node):
         '''
 
         pb.connect(*[pb.DIRECT])
-        pb.resetSimulation()
+        # pb.resetSimulation()
         path2 = os.path.join(
             get_package_share_directory("lbr_description"),
             "urdf",
             self.model_,
         )
+        print(path2)
         pb.setAdditionalSearchPath(path2)
 
         gravz = -9.81
         pb.setGravity(0, 0, gravz)
 
-        sampling_freq = 240
-        time_step = 1./float(sampling_freq)
-        pb.setTimeStep(time_step)
-        pb.resetDebugVisualizerCamera(
-            cameraDistance=0.2,
-            cameraYaw=-180,
-            cameraPitch=30,
-            cameraTargetPosition=np.array([0.35, -0.2, 0.2]),
-        )
-        pb.configureDebugVisualizer(pb.COV_ENABLE_GUI, 0)
+        # sampling_freq = 240
+        # time_step = 1./float(sampling_freq)
+        # pb.setTimeStep(time_step)
+        # pb.resetDebugVisualizerCamera(
+        #     cameraDistance=0.2,
+        #     cameraYaw=-180,
+        #     cameraPitch=30,
+        #     cameraTargetPosition=np.array([0.35, -0.2, 0.2]),
+        # )
+        # pb.configureDebugVisualizer(pb.COV_ENABLE_GUI, 0)
 
         self.id = pb.loadURDF(
             'med7.urdf',
@@ -417,7 +418,11 @@ class Estimator(Node):
         ttt = self.Ymat(q_np,qd_np,qdd_np) @Pb @ K @ self.PIvector(self.masses_np,self.massesCenter_np,self.Inertia_np)
         print("error2 = {0}\n".format(tau_ext-ttt))
 
-        tttt = self.robot.computeRNEA(q_np,qd_np,qdd_np,np.zeros([3,1]),np.zeros([3,1]))
+        q = cs.SX.sym('q', 7, 1)
+        qd = cs.SX.sym('qd', 7, 1)
+        qdd = cs.SX.sym('qdd', 7, 1)
+
+        tttt = self.robot.rnea(q,qd,qdd)
 
         print("error3= {0}\n".format(tau_ext-tttt))
 
