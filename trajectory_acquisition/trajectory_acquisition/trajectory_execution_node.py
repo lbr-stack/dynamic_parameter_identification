@@ -157,7 +157,7 @@ def main(args: List = None) -> None:
             trajectory_execution_node.go_to(
                 joint_names=joint_names,
                 target_joint_position=target_positions,
-                time_from_start=Duration(sec=4, nanosec=0),
+                time_from_start=Duration(sec=10, nanosec=0),
             )
 
     # save results
