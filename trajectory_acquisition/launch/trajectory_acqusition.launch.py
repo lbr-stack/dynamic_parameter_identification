@@ -8,15 +8,10 @@ from launch import LaunchDescription
 
 def generate_launch_description() -> LaunchDescription:
 
-    trajectory_acquisition_config = os.path.join(
-        get_package_share_directory("trajectory_acquisition"),
-        "config",
-        "trajectory_acquisition.yml",
-    )
-    trajectory_acquisition_node = Node(
+    trajectory_execution_node = Node(
         package="trajectory_acquisition",
-        executable="trajectory_acquisition_node",
-        parameters=[trajectory_acquisition_config],
+        executable="trajectory_execution_node",
+        output="screen",
     )
 
-    return LaunchDescription([trajectory_acquisition_node])
+    return LaunchDescription([trajectory_execution_node])
