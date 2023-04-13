@@ -1,10 +1,14 @@
+import csv
+import os
 from typing import List
 
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data, qos_profile_services_default
 from sensor_msgs.msg import JointState
-from std_srvs.srv import SetBool, Trigger
+from std_srvs.srv import SetBool
+
+from trajectory_acquisition_msgs.srv import Save
 
 
 class JointStateRecordingNode(Node):
@@ -27,7 +31,7 @@ class JointStateRecordingNode(Node):
             qos_profile=qos_profile_services_default,
         )
         self.save_record_trigger_service_ = self.create_service(
-            Trigger,
+            Save,
             "~/save",
             self.save_record_trigger_service_cb_,
             qos_profile=qos_profile_services_default,
@@ -60,14 +64,45 @@ class JointStateRecordingNode(Node):
         self.efforts_.clear()
 
     def save_record_trigger_service_cb_(
-        self, request: Trigger.Request, response: Trigger.Response
-    ) -> Trigger.Response:
-        self.get_logger().info("ATTEMPTING TO SAVE")
-
-        # save data to csv
-
+        self, request: Save.Request, response: Save.Response
+    ) -> Save.Response:
+        file_name, postfix = request.file_name.split(".")
+        self.save_(
+            request.path,
+            file_name + "_positions." + postfix,
+            self.joint_state_.name,
+            self.positions_,
+        )
+        self.save_(
+            request.path,
+            file_name + "_velocities." + postfix,
+            self.joint_state_.name,
+            self.velocities_,
+        )
+        self.save_(
+            request.path,
+            file_name + "_efforts." + postfix,
+            self.joint_state_.name,
+            self.efforts_,
+        )
+        self.get_logger().info("Done.")
         self.clear_records_()
+        response.message = f"Wrote files to {request.path}"
+        response.success = True
         return response
+
+    def save_(
+        self, path: str, file_name: str, keys: List[str], values_list: List[List[float]]
+    ) -> None:
+        # save data to csv
+        full_path = os.path.join(path, file_name)
+        self.get_logger().info(f"Saving to {full_path}...")
+        with open(full_path, "w") as csv_file:
+            csv_writer = csv.DictWriter(csv_file, fieldnames=keys)
+
+            csv_writer.writeheader()
+            for values in values_list:
+                csv_writer.writerow({key: value for key, value in zip(keys, values)})
 
 
 def main(args: List = None) -> None:
