@@ -2,7 +2,7 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>trajectory_acquisition</name>
-  <version>0.0.0</version>
+  <version>1.0.0</version>
   <description>Trajectory acquisition for position torque measurements</description>
   <maintainer email="martin.huber@kcl.ac.uk">mhubii</maintainer>
   <license>MIT</license>
@@ -16,6 +16,7 @@
   <exec_depend>rclpy</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>trajectory_msgs</exec_depend>
+  <exec_depend>trajectory_acquisition_msgs</exec_depend>
 
   <export>
     <build_type>ament_python</build_type>
