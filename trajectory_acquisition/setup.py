@@ -24,7 +24,8 @@ setup(
     tests_require=["pytest"],
     entry_points={
         "console_scripts": [
-            "trajectory_execution_node = trajectory_acquisition.trajectory_execution_node:main"
+            "joint_state_recording_node = trajectory_acquisition.joint_state_recording_node:main",
+            "trajectory_execution_node = trajectory_acquisition.trajectory_execution_node:main",
         ],
     },
 )
