@@ -4,10 +4,12 @@ import rclpy
 from builtin_interfaces.msg import Duration
 from control_msgs.action import FollowJointTrajectory
 from rclpy.action import ActionClient
-from rclpy.qos import qos_profile_services_default
 from rclpy.node import Node
+from rclpy.qos import qos_profile_services_default
+from std_srvs.srv import SetBool
 from trajectory_msgs.msg import JointTrajectoryPoint
-from std_srvs.srv import SetBool, Trigger
+
+from trajectory_acquisition_msgs.srv import Save
 
 
 class TrajectoryExecutionNode(Node):
@@ -43,7 +45,7 @@ class TrajectoryExecutionNode(Node):
 
         # saving client
         self.saving_joint_states_client_ = self.create_client(
-            Trigger,
+            Save,
             "/joint_state_recording_node/save",
             qos_profile=qos_profile_services_default,
         )
@@ -122,7 +124,7 @@ class TrajectoryExecutionNode(Node):
                 f"Failed to stop recording {self.record_joint_states_client_.srv_name}"
             )
 
-        saving_request = Trigger.Request()
+        saving_request = Save.Request(path=path, file_name=file_name)
         saving_future = self.saving_joint_states_client_.call_async(saving_request)
         rclpy.spin_until_future_complete(self, saving_future)
 
@@ -151,7 +153,7 @@ def main(args: List = None) -> None:
             joint_names = [x.strip() for x in list(row.keys())]
             target_positions = [float(x) for x in row.values()]
 
-            # execute
+            # go to target position
             trajectory_execution_node.go_to(
                 joint_names=joint_names,
                 target_joint_position=target_positions,
