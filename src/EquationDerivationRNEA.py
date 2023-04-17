@@ -39,7 +39,7 @@ def find_dyn_parm_deps(dof, parm_num, regressor_func):
         Z[i * dof: i * dof + dof, :] = np.matrix(
             regressor_func(q, dq, ddq)).reshape(dof, parm_num)
 
-    R1_diag = np.linalg.qr(Z, mode='economic').diagonal().round(round)
+    R1_diag = np.linalg.qr(Z, mode='r').diagonal().round(round)
     dbi = []
     ddi = []
     for i, e in enumerate(R1_diag):
@@ -64,7 +64,7 @@ def find_dyn_parm_deps(dof, parm_num, regressor_func):
 
 
 class Estimator(Node):
-    def __init__(self, node_name = "para_estimatior", dt_ = 1.0) -> None:
+    def __init__(self, node_name = "para_estimatior", dt_ = 10.0, N_ = 100) -> None:
         super().__init__(node_name=node_name)
 
         self.dt_ = dt_
@@ -77,6 +77,7 @@ class Estimator(Node):
             f"{self.model_}.urdf.xacro",
         )
 
+        self.lbr_command_timer_ = self.create_timer(self.dt_, self.timer_cb_regressor)
 
         # 1. Get the kinematic parameters of every joints
         self.robot = optas.RobotModel(
@@ -267,14 +268,13 @@ class Estimator(Node):
         """
         Get Inertia parameters set
         """
-        dynamicsF_ = self.dynamics_(q,np.zeros([Nb,1]),np.zeros([Nb,1]),
-                                    np.ones([Nb+1,1]),np.zeros([3,Nb+1]),np.zeros([3,3*Nb+3]))
+        # dynamicsF_ = self.dynamics_(q,np.zeros([Nb,1]),np.zeros([Nb,1]),
+        #                             np.ones([Nb+1,1]),np.zeros([3,Nb+1]),np.zeros([3,3*Nb+3]))
 
 
         # print("dynamicsF_ = {0}".format(dynamicsF_))
 
 
-        self.lbr_command_timer_ = self.create_timer(self.dt_, self.timer_cb_)
         
         # _numK = 10
         # for every torque
@@ -380,21 +380,110 @@ class Estimator(Node):
         )
         self.iter = 0.0
 
+        pam_dim = PI_vecter.shape[0]
+        tau_dim = Y_mat.shape[0]
+        # dlim = {0: [-1.5, 1.5], 1: [-1, 1]}
+
+        regressor = optas.TaskModel(
+            "regressor", pam_dim, time_derivs=[0]
+        )
+        pam_name = regressor.get_name()
+        T = 1
+        self.N = N_
+        builder = optas.OptimizationBuilder(T, tasks=regressor, derivs_align=True)
+
+        # Add parameters
+        init_para = builder.add_parameter("init", pam_dim)  # initial point mass position
+        # goal_para = builder.add_parameter("goal", pam_dim)  # goal point mass position
+        estimated_para = builder.get_model_states(pam_name)
+        tau_record = builder.add_parameter("tau", N_*tau_dim)
+        q_record = builder.add_parameter("q_N", N_*tau_dim)
+        qd_record = builder.add_parameter("qd_N", N_*tau_dim)
+        qdd_record = builder.add_parameter("qdd_N", N_*tau_dim)
+
+        Pb, Pd, Kd =find_dyn_parm_deps(7,80,self.Ymat)
+        K = Pb.T +Kd @Pd.T
+
+        Y_ = []
+
+        for i in range(self.N):
+            Y_temp = self.Ymat(q_record[i*tau_dim:(i+1)*tau_dim],
+                               qd_record[i*tau_dim:(i+1)*tau_dim],
+                               qdd_record[i*tau_dim:(i+1)*tau_dim]) @Pb @ K
+            Y_.append(Y_temp)
+            
+        Y_r = optas.vertcat(*Y_)
+            
+        builder.fix_configuration(pam_name, config=init_para)
+
+        builder.add_cost_term("regressor", optas.sumsqr(tau_record- Y_r@estimated_para))
+        self.solver = optas.CasADiSolver(builder.build()).setup("ipopt")
+
+
+    def regress(self, init_para,q,qd,qdd,taus):
+        self.solver.reset_parameters({"init": init_para, 
+                                       "q_N":q, "qd_N":qd, "qdd_N":qdd,"tau":taus})
+        solution = self.solver.solve()
+        # plan_y = self.solver.interpolate(solution[f"{self.pm_name}/y"], self.duration)
+        # plan_dy = self.solver.interpolate(solution[f"{self.pm_name}/dy"], self.duration)
+        return solution
     
+
+    def timer_cb_regressor(self) -> None:
+        
+        q_nps = []
+        qd_nps = []
+        qdd_nps = []
+        taus = []
+        init_para = np.random.uniform(-0.1, 0.1, size=80)
+        for k in range(self.N):
+            q_np = np.random.uniform(-1.5, 1.5, size=7)
+            qd_np = np.random.uniform(-1.5, 1.5, size=7)
+            qdd_np = np.random.uniform(-1.5, 1.5, size=7)
+
+            tau_ext = self.robot.rnea(q_np,qd_np,qdd_np)
+
+            q_nps.append(q_np)
+            qd_nps.append(qd_np)
+            qdd_nps.append(qdd_np)
+
+            taus.append(tau_ext)
+
+        
+        q_nps1 = np.hstack(q_nps)
+        qd_nps1 = np.hstack(qd_nps)
+        qdd_nps1 = np.hstack(qdd_nps)
+        taus1 = np.hstack(taus)
+
+        solution=self.regress(init_para, q_nps1,qd_nps1,qdd_nps1,taus1)
+        print("solution = {0}".format(solution))
+
+        q_np = np.random.uniform(-1.5, 1.5, size=7)
+        qd_np = np.random.uniform(-1.5, 1.5, size=7)
+        qdd_np = np.random.uniform(-1.5, 1.5, size=7)
+
+        # self.Ymat(q_np,qd_np,qdd_np) @Pb @ K @ @ solution['regressor/y/x']
+
+        # print(q_nps1)
+
+
+
+            
+
 
         
     def timer_cb_(self) -> None:
-        q_np = np.array([1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0])
-        qd_np = np.array([01.1, 01.1, 02.0, 1.0, 1.0, 1.0, 1.0])
-        qdd_np = np.array([1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0])
+        q_np = np.array([1.0, 1.0, 1.0, 10.0, 1.0, 1.0, 1.0])
+        qd_np = np.array([001.1, 1.1, 1.0, 1.0, 1.0, 1.0, 1.0])
+        qdd_np = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
         self.iter += 3.1415926535
         for i in range(self.Nb):
             # print("ccc = {0}".format(i))
             pb.resetJointState(self.id, i, q_np[i], qd_np[i])
 
         tau_ext = np.array(pb.calculateInverseDynamics(self.id, q_np.tolist(), qd_np.tolist(), qdd_np.tolist()))
-        print("self.Inertia_np = {0}".format(self.Inertia_np[:,0:3]))
-        print("self.massesCenter_np = {0}".format(self.massesCenter_np[:,0:3]))
+        # print("self.Inertia_np = {0}".format(self.Inertia_np[:,0:3]))
+        # print("self.massesCenter_np = {0}".format(self.massesCenter_np[:,0:3]))
         
         # t = self.gra(q_np,self.masses_np,self.massesCenter_np)
         t = self.dynamics_(q_np,qd_np,qdd_np,self.masses_np,self.massesCenter_np,self.Inertia_np)
@@ -405,10 +494,10 @@ class Estimator(Node):
         # print()
 
         print("tau_ext = {0}\n tau_g = {1}".format(tau_ext,t))
-        print("\n error = {0}\n ".format(tau_ext-t))
+        print("error = {0}\n ".format(tau_ext-t))
 
-        print("tau_ext1 = {0}\n tau_g1 = {1}".format(tau_ext,tt))
-        print("\n error1 = {0}\n ".format(tau_ext-tt))
+        # print("tau_ext1 = {0}\n tau_g1 = {1}".format(tau_ext,tt))
+        print("error1 = {0}\n ".format(tau_ext-tt))
 
         Pb, Pd, Kd =find_dyn_parm_deps(7,80,self.Ymat)
         K = Pb.T +Kd @Pd.T
@@ -422,9 +511,9 @@ class Estimator(Node):
         qd = cs.SX.sym('qd', 7, 1)
         qdd = cs.SX.sym('qdd', 7, 1)
 
-        tttt = self.robot.rnea(q,qd,qdd)
+        # tttt = self.robot.rnea(q,qd,qdd)
 
-        print("error3= {0}\n".format(tau_ext-tttt))
+        # print("error3= {0}\n".format(tau_ext-tttt))
 
         # Y = self.Ymat(q_np,qd_np,qdd_np)
         # Q, R = optas.qr(Y)
