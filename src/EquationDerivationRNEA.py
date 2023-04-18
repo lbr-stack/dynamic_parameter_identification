@@ -64,7 +64,7 @@ def find_dyn_parm_deps(dof, parm_num, regressor_func):
 
 
 class Estimator(Node):
-    def __init__(self, node_name = "para_estimatior", dt_ = 10.0, N_ = 100) -> None:
+    def __init__(self, node_name = "para_estimatior", dt_ = 5.0, N_ = 100) -> None:
         super().__init__(node_name=node_name)
 
         self.dt_ = dt_
@@ -380,7 +380,10 @@ class Estimator(Node):
         )
         self.iter = 0.0
 
-        pam_dim = PI_vecter.shape[0]
+        Pb, Pd, Kd =find_dyn_parm_deps(7,80,self.Ymat)
+        K = Pb.T +Kd @Pd.T
+
+        pam_dim = (K@PI_vecter).shape[0]
         tau_dim = Y_mat.shape[0]
         # dlim = {0: [-1.5, 1.5], 1: [-1, 1]}
 
@@ -388,6 +391,7 @@ class Estimator(Node):
             "regressor", pam_dim, time_derivs=[0]
         )
         pam_name = regressor.get_name()
+        self.pam_name = pam_name
         T = 1
         self.N = N_
         builder = optas.OptimizationBuilder(T, tasks=regressor, derivs_align=True)
@@ -395,28 +399,26 @@ class Estimator(Node):
         # Add parameters
         init_para = builder.add_parameter("init", pam_dim)  # initial point mass position
         # goal_para = builder.add_parameter("goal", pam_dim)  # goal point mass position
-        estimated_para = builder.get_model_states(pam_name)
+        estimated_para = builder.get_model_states(pam_name,time_deriv=0)
         tau_record = builder.add_parameter("tau", N_*tau_dim)
         q_record = builder.add_parameter("q_N", N_*tau_dim)
         qd_record = builder.add_parameter("qd_N", N_*tau_dim)
         qdd_record = builder.add_parameter("qdd_N", N_*tau_dim)
 
-        Pb, Pd, Kd =find_dyn_parm_deps(7,80,self.Ymat)
-        K = Pb.T +Kd @Pd.T
 
         Y_ = []
 
         for i in range(self.N):
             Y_temp = self.Ymat(q_record[i*tau_dim:(i+1)*tau_dim],
                                qd_record[i*tau_dim:(i+1)*tau_dim],
-                               qdd_record[i*tau_dim:(i+1)*tau_dim]) @Pb @ K
+                               qdd_record[i*tau_dim:(i+1)*tau_dim]) @Pb # @ K
             Y_.append(Y_temp)
             
         Y_r = optas.vertcat(*Y_)
             
         builder.fix_configuration(pam_name, config=init_para)
 
-        builder.add_cost_term("regressor", optas.sumsqr(tau_record- Y_r@estimated_para))
+        builder.add_cost_term("regressor", optas.sumsqr(tau_record- Y_r @ estimated_para))
         self.solver = optas.CasADiSolver(builder.build()).setup("ipopt")
 
 
@@ -431,36 +433,74 @@ class Estimator(Node):
 
     def timer_cb_regressor(self) -> None:
         
+        Pb, Pd, Kd =find_dyn_parm_deps(7,80,self.Ymat)
+        K = Pb.T +Kd @Pd.T
+
         q_nps = []
         qd_nps = []
         qdd_nps = []
         taus = []
-        init_para = np.random.uniform(-0.1, 0.1, size=80)
+        Y_ = []
+        init_para = np.random.uniform(0.0, 0.1, size=50)
         for k in range(self.N):
             q_np = np.random.uniform(-1.5, 1.5, size=7)
-            qd_np = np.random.uniform(-1.5, 1.5, size=7)
-            qdd_np = np.random.uniform(-1.5, 1.5, size=7)
+            qd_np = np.random.uniform(-0.2, 0.2, size=7)
+            qdd_np = np.random.uniform(-0.1, 0.1, size=7)
 
             tau_ext = self.robot.rnea(q_np,qd_np,qdd_np)
+            # tau_ext=self.Ymat(q_np,qd_np,qdd_np)@ self.PIvector(self.masses_np,self.massesCenter_np,self.Inertia_np)
+
+            Y_temp = self.Ymat(q_np,
+                               qd_np,
+                               qdd_np) @Pb 
+            Y_.append(Y_temp)
+            # print(Y_temp)
+            
 
             q_nps.append(q_np)
             qd_nps.append(qd_np)
             qdd_nps.append(qdd_np)
 
-            taus.append(tau_ext)
+            taus.append(tau_ext.T)
 
         
+        Y_r = optas.vertcat(*Y_)
         q_nps1 = np.hstack(q_nps)
         qd_nps1 = np.hstack(qd_nps)
         qdd_nps1 = np.hstack(qdd_nps)
         taus1 = np.hstack(taus)
 
         solution=self.regress(init_para, q_nps1,qd_nps1,qdd_nps1,taus1)
-        print("solution = {0}".format(solution))
+        # print("solution = {0}".format(solution[f"{self.pam_name}/y"]))
 
-        q_np = np.random.uniform(-1.5, 1.5, size=7)
-        qd_np = np.random.uniform(-1.5, 1.5, size=7)
-        qdd_np = np.random.uniform(-1.5, 1.5, size=7)
+        print("taus1 size = {0}".format(taus1.shape))
+        print("q_nps1 size = {0}".format(q_nps1.shape))
+        print("qd_nps1 size = {0}".format(qd_nps1.shape))
+
+        real_pam=self.PIvector(self.masses_np,self.massesCenter_np,self.Inertia_np)
+        # print("error = {0}".format(solution[f"{self.pam_name}/y"] - real_pam))
+        # q_np = np.random.uniform(-1.5, 1.5, size=7)
+        # qd_np = np.random.uniform(-1.5, 1.5, size=7)
+        # qdd_np = np.random.uniform(-1.5, 1.5, size=7)
+        # print(Y_r)
+        taus1 = taus1.T
+
+        estimate_pam = np.linalg.inv(Y_r.T @ Y_r) @ Y_r.T @ taus1
+
+
+        for k in range(self.N):
+            q_np = np.random.uniform(-1.5, 1.5, size=7)
+            qd_np = np.random.uniform(-0.0, 0.0, size=7)
+            qdd_np = np.random.uniform(-0.0, 0.0, size=7)
+
+            # tau_ext = self.robot.rnea(q_np,qd_np,qdd_np)
+            # e=self.Ymat(q_np,qd_np,qdd_np)@Pb @ (solution[f"{self.pam_name}/y"] -  K @real_pam)
+            # print("error = {0}".format(e))
+
+            e=self.Ymat(q_np,qd_np,qdd_np)@Pb @  (estimate_pam - K @real_pam)
+            print("error1 = {0}".format(e))
+
+
 
         # self.Ymat(q_np,qd_np,qdd_np) @Pb @ K @ @ solution['regressor/y/x']
 
@@ -473,9 +513,12 @@ class Estimator(Node):
 
         
     def timer_cb_(self) -> None:
-        q_np = np.array([1.0, 1.0, 1.0, 10.0, 1.0, 1.0, 1.0])
-        qd_np = np.array([001.1, 1.1, 1.0, 1.0, 1.0, 1.0, 1.0])
-        qdd_np = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+        # q_np = np.array([1.0, 1.0, 1.0, 10.0, 1.0, 1.0, 1.0])
+        # qd_np = np.array([001.1, 1.1, 1.0, 1.0, 1.0, 1.0, 1.0])
+        # qdd_np = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+        q_np = np.random.uniform(-1.5, 1.5, size=7)
+        qd_np = np.random.uniform(-0.2, 0.2, size=7)
+        qdd_np = np.random.uniform(-0.2, 0.2, size=7)
         self.iter += 3.1415926535
         for i in range(self.Nb):
             # print("ccc = {0}".format(i))
