@@ -20,6 +20,12 @@ import pathlib
 
 import urdf_parser_py.urdf as urdf
 
+Order = [4,1,2,3,5,6,7]
+
+# def GetOrder(file_path):
+
+#     return order
+
 def find_dyn_parm_deps(dof, parm_num, regressor_func):
     '''
     Find dynamic parameter dependencies (i.e., regressor column dependencies).
@@ -393,13 +399,16 @@ class Estimator(Node):
         taus = []
         Y_ = []
         init_para = np.random.uniform(0.0, 0.1, size=50)
-        for k in range(1,round(len(positions)/2),1):
+        
+        for k in range(300,len(positions),1):
             # print("q_np = {0}".format(q_np))
             # q_np = np.random.uniform(-1.5, 1.5, size=7)
-            q_np = positions[k][1:]
-            qd_np = velocities[k][1:]
-            tau_ext = efforts[k][1:]
-            qdd_np = (np.array(velocities[k][1:])-np.array(velocities[k][1:]))/(velocities[k][0]-velocities[k][0])
+            q_np = [positions[k][i] for i in Order]
+            qd_np = [velocities[k][i] for i in Order]
+            tau_ext = [efforts[k][i] for i in Order]
+
+            qdlast_np = [velocities[k-1][i] for i in Order]
+            qdd_np = (np.array(qd_np)-np.array(qdlast_np))/(velocities[k][0]-velocities[k-1][0])
             qdd_np = qdd_np.tolist()
             
             # qd_np = np.random.uniform(-0.2, 0.2, size=7)
@@ -420,6 +429,7 @@ class Estimator(Node):
             qdd_nps.append(qdd_np)
 
             taus.append(tau_ext)
+            # print(qdd_np)
 
         
         Y_r = optas.vertcat(*Y_)
@@ -443,6 +453,8 @@ class Estimator(Node):
         # print(Y_r)
         taus1 = taus1.T
 
+        #temp =Y_r.T @ Y_r 
+        #qdd_np
         estimate_pam = np.linalg.inv(Y_r.T @ Y_r) @ Y_r.T @ taus1
 
         return estimate_pam
@@ -452,11 +464,19 @@ class Estimator(Node):
         Pb, Pd, Kd =find_dyn_parm_deps(7,80,self.Ymat)
         K = Pb.T +Kd @Pd.T
 
-        for k in range(round(len(positions)/2),len(positions),1):
-            q_np = positions[k][1:]
-            qd_np = velocities[k][1:]
-            tau_ext = efforts[k][1:]
-            qdd_np = (np.array(velocities[k][1:])-np.array(velocities[k][1:]))/(velocities[k][0]-velocities[k][0])
+        for k in range(1,len(positions),1):
+            # q_np = positions[k][4,1,2,3,5,6,7]
+            # qd_np = velocities[k][4,1,2,3,5,6,7]
+            # tau_ext = efforts[k][4,1,2,3,5,6,7]
+            # qdd_np = (np.array(velocities[k][4,1,2,3,5,6,7])-np.array(velocities[k-1][4,1,2,3,5,6,7]))/(velocities[k][0]-velocities[k-1][0])
+            # qdd_np = qdd_np.tolist()
+
+            q_np = [positions[k][i] for i in Order]
+            qd_np = [velocities[k][i] for i in Order]
+            tau_ext = [efforts[k][i] for i in Order]
+
+            qdlast_np = [velocities[k-1][i] for i in Order]
+            qdd_np = (np.array(qd_np)-np.array(qdlast_np))/(velocities[k][0]-velocities[k-1][0])
             qdd_np = qdd_np.tolist()
 
             # tau_ext = self.robot.rnea(q_np,qd_np,qdd_np)
@@ -484,6 +504,7 @@ def main(args=None):
     paraEstimator = Estimator()
     positions, velocities, efforts = paraEstimator.ExtractFromCsv()
     estimate_pam = paraEstimator.timer_cb_regressor(positions, velocities, efforts)
+    print("estimate_pam = {0}".format(estimate_pam))
     paraEstimator.testWithEstimatedPara(positions, velocities, efforts,estimate_pam)
 
     rclpy.shutdown()
