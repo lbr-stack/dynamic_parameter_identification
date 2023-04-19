@@ -3,6 +3,7 @@ import os
 from typing import List
 
 import rclpy
+from builtin_interfaces.msg import Time
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data, qos_profile_services_default
 from sensor_msgs.msg import JointState
@@ -15,7 +16,12 @@ class JointStateRecordingNode(Node):
     def __init__(self, node_name: str = "joint_state_recording_node") -> None:
         super().__init__(node_name=node_name)
         self.joint_state_ = None
-        self.positions_, self.velocities_, self.efforts_ = [], [], []
+        self.positions_, self.velocities_, self.efforts_, self.time_stamp_ = (
+            [],
+            [],
+            [],
+            [],
+        )
         self.joint_state_sub_ = self.create_subscription(
             JointState,
             "/joint_states",
@@ -45,9 +51,14 @@ class JointStateRecordingNode(Node):
                 self.joint_state_.velocity,
                 self.joint_state_.effort,
             )
+            time_stamp = self.time_stamp_to_sec_(self.joint_state_.header.stamp)
             self.positions_.append(position)
             self.velocities_.append(velocity)
             self.efforts_.append(effort)
+            self.time_stamp_.append(time_stamp)
+
+    def time_stamp_to_sec_(self, time_stamp: Time) -> float:
+        return float(time_stamp.sec) + float(time_stamp.nanosec) / 1.0e9
 
     def recording_service_cb_(
         self, request: SetBool.Request, response: SetBool.Response
@@ -70,20 +81,29 @@ class JointStateRecordingNode(Node):
         self.save_(
             request.path,
             file_name + "_positions." + postfix,
-            self.joint_state_.name,
-            self.positions_,
+            ["time"] + self.joint_state_.name,
+            [
+                [time] + list(positions)
+                for time, positions in zip(self.time_stamp_, self.positions_)
+            ],
         )
         self.save_(
             request.path,
             file_name + "_velocities." + postfix,
-            self.joint_state_.name,
-            self.velocities_,
+            ["time"] + self.joint_state_.name,
+            [
+                [time] + list(velocities)
+                for time, velocities in zip(self.time_stamp_, self.velocities_)
+            ],
         )
         self.save_(
             request.path,
             file_name + "_efforts." + postfix,
-            self.joint_state_.name,
-            self.efforts_,
+            ["time"] + self.joint_state_.name,
+            [
+                [time] + list(efforts)
+                for time, efforts in zip(self.time_stamp_, self.efforts_)
+            ],
         )
         self.get_logger().info("Done.")
         self.clear_records_()
