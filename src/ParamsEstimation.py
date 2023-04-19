@@ -14,10 +14,17 @@ import xacro
 from ament_index_python import get_package_share_directory
 from rclpy import qos
 from rclpy.node import Node
+import csv
 
 import pathlib
 
 import urdf_parser_py.urdf as urdf
+
+Order = [4,1,2,3,5,6,7]
+
+# def GetOrder(file_path):
+
+#     return order
 
 def find_dyn_parm_deps(dof, parm_num, regressor_func):
     '''
@@ -76,6 +83,7 @@ class Estimator(Node):
             self.model_,
             f"{self.model_}.urdf.xacro",
         )
+        self.N = N_
 
         # self.lbr_command_timer_ = self.create_timer(self.dt_, self.timer_cb_regressor)
 
@@ -233,9 +241,6 @@ class Estimator(Node):
         print([joint.name for joint in robot.joints if joint.origin is not None])
         print([joint.origin.xyz for joint in robot.joints if joint.origin is not None])
 
-
-
-
         print([link.name for link in robot.links if link.inertial is not None])
         print([link.inertial.origin.xyz for link in robot.links if link.inertial is not None])
         print([link.inertial.mass for link in robot.links if link.inertial is not None])
@@ -343,95 +348,47 @@ class Estimator(Node):
         PI_vecter = optas.vertcat(*PI_a)
         print("PI_vecter shape = {0}, {1}".format(PI_vecter.shape[0],PI_vecter.shape[1]))
         self.PIvector = optas.Function('Dynamic_PIvector',[m,cm,Icm],[PI_vecter])
-        
-
-
-        '''
-        Setup PyBullet for checking RNEA
-        '''
-
-        pb.connect(*[pb.DIRECT])
-        # pb.resetSimulation()
-        path2 = os.path.join(
-            get_package_share_directory("lbr_description"),
-            "urdf",
-            self.model_,
-        )
-        print(path2)
-        pb.setAdditionalSearchPath(path2)
-
-        gravz = -9.81
-        pb.setGravity(0, 0, gravz)
-
-        # sampling_freq = 240
-        # time_step = 1./float(sampling_freq)
-        # pb.setTimeStep(time_step)
-        # pb.resetDebugVisualizerCamera(
-        #     cameraDistance=0.2,
-        #     cameraYaw=-180,
-        #     cameraPitch=30,
-        #     cameraTargetPosition=np.array([0.35, -0.2, 0.2]),
-        # )
-        # pb.configureDebugVisualizer(pb.COV_ENABLE_GUI, 0)
-
-        self.id = pb.loadURDF(
-            'med7.urdf',
-            basePosition=[0, 0, 0],
-        )
-        self.iter = 0.0
-
-        Pb, Pd, Kd =find_dyn_parm_deps(7,80,self.Ymat)
-        K = Pb.T +Kd @Pd.T
-
-        pam_dim = (K@PI_vecter).shape[0]
-        tau_dim = Y_mat.shape[0]
-        # dlim = {0: [-1.5, 1.5], 1: [-1, 1]}
-
-        regressor = optas.TaskModel(
-            "regressor", pam_dim, time_derivs=[0]
-        )
-        pam_name = regressor.get_name()
-        self.pam_name = pam_name
-        T = 1
-        self.N = N_
-        builder = optas.OptimizationBuilder(T, tasks=regressor, derivs_align=True)
-
-        # Add parameters
-        init_para = builder.add_parameter("init", pam_dim)  # initial point mass position
-        # goal_para = builder.add_parameter("goal", pam_dim)  # goal point mass position
-        estimated_para = builder.get_model_states(pam_name,time_deriv=0)
-        tau_record = builder.add_parameter("tau", N_*tau_dim)
-        q_record = builder.add_parameter("q_N", N_*tau_dim)
-        qd_record = builder.add_parameter("qd_N", N_*tau_dim)
-        qdd_record = builder.add_parameter("qdd_N", N_*tau_dim)
-
-
-        Y_ = []
-
-        for i in range(self.N):
-            Y_temp = self.Ymat(q_record[i*tau_dim:(i+1)*tau_dim],
-                               qd_record[i*tau_dim:(i+1)*tau_dim],
-                               qdd_record[i*tau_dim:(i+1)*tau_dim]) @Pb # @ K
-            Y_.append(Y_temp)
-            
-        Y_r = optas.vertcat(*Y_)
-            
-        builder.fix_configuration(pam_name, config=init_para)
-
-        builder.add_cost_term("regressor", optas.sumsqr(tau_record- Y_r @ estimated_para))
-        self.solver = optas.CasADiSolver(builder.build()).setup("ipopt")
-
-
-    def regress(self, init_para,q,qd,qdd,taus):
-        self.solver.reset_parameters({"init": init_para, 
-                                       "q_N":q, "qd_N":qd, "qdd_N":qdd,"tau":taus})
-        solution = self.solver.solve()
-        # plan_y = self.solver.interpolate(solution[f"{self.pm_name}/y"], self.duration)
-        # plan_dy = self.solver.interpolate(solution[f"{self.pm_name}/dy"], self.duration)
-        return solution
+    
+    @ staticmethod
+    def readCsvToList(path):
+        l = []
+        with open(path) as csv_file:
+            csv_reader = csv.DictReader(csv_file)
+            for row in csv_reader:
+                joint_names = [x.strip() for x in list(row.keys())]
+                l.append([float(x) for x in row.values()])
+        return l    
     
 
-    def timer_cb_regressor(self) -> None:
+    def ExtractFromCsv(self):
+        path_pos = os.path.join(
+            get_package_share_directory("gravity_compensation"),
+            "test",
+            "joint_states_positions.csv",
+        )
+
+        path_vel = os.path.join(
+            get_package_share_directory("gravity_compensation"),
+            "test",
+            "joint_states_velocities.csv",
+        )
+
+        path_eff = os.path.join(
+            get_package_share_directory("gravity_compensation"),
+            "test",
+            "joint_states_efforts.csv",
+        )
+        pos = Estimator.readCsvToList(path_pos)
+        vel = Estimator.readCsvToList(path_vel)
+        eff = Estimator.readCsvToList(path_eff)
+
+        # print("pos = {0}".format(pos))
+        
+        return pos, vel, eff
+
+    
+
+    def timer_cb_regressor(self, positions, velocities, efforts):
         
         Pb, Pd, Kd =find_dyn_parm_deps(7,80,self.Ymat)
         K = Pb.T +Kd @Pd.T
@@ -442,13 +399,23 @@ class Estimator(Node):
         taus = []
         Y_ = []
         init_para = np.random.uniform(0.0, 0.1, size=50)
-        for k in range(self.N):
-            q_np = np.random.uniform(-1.5, 1.5, size=7)
-            qd_np = np.random.uniform(-0.2, 0.2, size=7)
-            qdd_np = np.random.uniform(-0.1, 0.1, size=7)
+        
+        for k in range(300,len(positions),1):
+            # print("q_np = {0}".format(q_np))
+            # q_np = np.random.uniform(-1.5, 1.5, size=7)
+            q_np = [positions[k][i] for i in Order]
+            qd_np = [velocities[k][i] for i in Order]
+            tau_ext = [efforts[k][i] for i in Order]
 
-            tau_ext = self.robot.rnea(q_np,qd_np,qdd_np)
-            # tau_ext=self.Ymat(q_np,qd_np,qdd_np)@ self.PIvector(self.masses_np,self.massesCenter_np,self.Inertia_np)
+            qdlast_np = [velocities[k-1][i] for i in Order]
+            qdd_np = (np.array(qd_np)-np.array(qdlast_np))/(velocities[k][0]-velocities[k-1][0])
+            qdd_np = qdd_np.tolist()
+            
+            # qd_np = np.random.uniform(-0.2, 0.2, size=7)
+            # qdd_np = np.random.uniform(-0.1, 0.1, size=7)
+
+            # tau_ext = self.robot.rnea(q_np,qd_np,qdd_np)
+            
 
             Y_temp = self.Ymat(q_np,
                                qd_np,
@@ -461,7 +428,8 @@ class Estimator(Node):
             qd_nps.append(qd_np)
             qdd_nps.append(qdd_np)
 
-            taus.append(tau_ext.T)
+            taus.append(tau_ext)
+            # print(qdd_np)
 
         
         Y_r = optas.vertcat(*Y_)
@@ -470,14 +438,14 @@ class Estimator(Node):
         qdd_nps1 = np.hstack(qdd_nps)
         taus1 = np.hstack(taus)
 
-        solution=self.regress(init_para, q_nps1,qd_nps1,qdd_nps1,taus1)
+        # solution=self.regress(init_para, q_nps1,qd_nps1,qdd_nps1,taus1)
         # print("solution = {0}".format(solution[f"{self.pam_name}/y"]))
 
         print("taus1 size = {0}".format(taus1.shape))
         print("q_nps1 size = {0}".format(q_nps1.shape))
         print("qd_nps1 size = {0}".format(qd_nps1.shape))
 
-        real_pam=self.PIvector(self.masses_np,self.massesCenter_np,self.Inertia_np)
+        # real_pam=self.PIvector(self.masses_np,self.massesCenter_np,self.Inertia_np)
         # print("error = {0}".format(solution[f"{self.pam_name}/y"] - real_pam))
         # q_np = np.random.uniform(-1.5, 1.5, size=7)
         # qd_np = np.random.uniform(-1.5, 1.5, size=7)
@@ -485,89 +453,45 @@ class Estimator(Node):
         # print(Y_r)
         taus1 = taus1.T
 
+        #temp =Y_r.T @ Y_r 
+        #qdd_np
         estimate_pam = np.linalg.inv(Y_r.T @ Y_r) @ Y_r.T @ taus1
 
+        return estimate_pam
+    
+    def testWithEstimatedPara(self, positions, velocities, efforts, para)->None:
 
-        for k in range(self.N):
-            q_np = np.random.uniform(-1.5, 1.5, size=7)
-            qd_np = np.random.uniform(-0.0, 0.0, size=7)
-            qdd_np = np.random.uniform(-0.0, 0.0, size=7)
+        Pb, Pd, Kd =find_dyn_parm_deps(7,80,self.Ymat)
+        K = Pb.T +Kd @Pd.T
+
+        for k in range(1,len(positions),1):
+            # q_np = positions[k][4,1,2,3,5,6,7]
+            # qd_np = velocities[k][4,1,2,3,5,6,7]
+            # tau_ext = efforts[k][4,1,2,3,5,6,7]
+            # qdd_np = (np.array(velocities[k][4,1,2,3,5,6,7])-np.array(velocities[k-1][4,1,2,3,5,6,7]))/(velocities[k][0]-velocities[k-1][0])
+            # qdd_np = qdd_np.tolist()
+
+            q_np = [positions[k][i] for i in Order]
+            qd_np = [velocities[k][i] for i in Order]
+            tau_ext = [efforts[k][i] for i in Order]
+
+            qdlast_np = [velocities[k-1][i] for i in Order]
+            qdd_np = (np.array(qd_np)-np.array(qdlast_np))/(velocities[k][0]-velocities[k-1][0])
+            qdd_np = qdd_np.tolist()
 
             # tau_ext = self.robot.rnea(q_np,qd_np,qdd_np)
             # e=self.Ymat(q_np,qd_np,qdd_np)@Pb @ (solution[f"{self.pam_name}/y"] -  K @real_pam)
             # print("error = {0}".format(e))
 
-            e=self.Ymat(q_np,qd_np,qdd_np)@Pb @  (estimate_pam - K @real_pam)
+            e=self.Ymat(q_np,qd_np,qdd_np)@Pb @  para - tau_ext 
             print("error1 = {0}".format(e))
+            print("tau_ext = {0}".format(tau_ext))
 
+        # print("taus1 size = {0}".format(taus1.shape))
+        # print("q_nps1 size = {0}".format(q_nps1.shape))
+        # print("qd_nps1 size = {0}".format(qd_nps1.shape))
 
-
-        # self.Ymat(q_np,qd_np,qdd_np) @Pb @ K @ @ solution['regressor/y/x']
-
-        # print(q_nps1)
-
-
-
-            
-
-
-        
-    def timer_cb_(self) -> None:
-        # q_np = np.array([1.0, 1.0, 1.0, 10.0, 1.0, 1.0, 1.0])
-        # qd_np = np.array([001.1, 1.1, 1.0, 1.0, 1.0, 1.0, 1.0])
-        # qdd_np = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
-        q_np = np.random.uniform(-1.5, 1.5, size=7)
-        qd_np = np.random.uniform(-0.2, 0.2, size=7)
-        qdd_np = np.random.uniform(-0.2, 0.2, size=7)
-        self.iter += 3.1415926535
-        for i in range(self.Nb):
-            # print("ccc = {0}".format(i))
-            pb.resetJointState(self.id, i, q_np[i], qd_np[i])
-
-        tau_ext = np.array(pb.calculateInverseDynamics(self.id, q_np.tolist(), qd_np.tolist(), qdd_np.tolist()))
-        # print("self.Inertia_np = {0}".format(self.Inertia_np[:,0:3]))
-        # print("self.massesCenter_np = {0}".format(self.massesCenter_np[:,0:3]))
-        
-        # t = self.gra(q_np,self.masses_np,self.massesCenter_np)
-        t = self.dynamics_(q_np,qd_np,qdd_np,self.masses_np,self.massesCenter_np,self.Inertia_np)
-        
-
-        tt = self.Ymat(q_np,qd_np,qdd_np) @ self.PIvector(self.masses_np,self.massesCenter_np,self.Inertia_np)
-
-        # print()
-
-        print("tau_ext = {0}\n tau_g = {1}".format(tau_ext,t))
-        print("error = {0}\n ".format(tau_ext-t))
-
-        # print("tau_ext1 = {0}\n tau_g1 = {1}".format(tau_ext,tt))
-        print("error1 = {0}\n ".format(tau_ext-tt))
-
-        Pb, Pd, Kd =find_dyn_parm_deps(7,80,self.Ymat)
-        K = Pb.T +Kd @Pd.T
-
-        # print("K = {0}".format(K))
-        # print("beta = {0}".format(K @ self.PIvector(self.masses_np,self.massesCenter_np,self.Inertia_np)))
-        ttt = self.Ymat(q_np,qd_np,qdd_np) @Pb @ K @ self.PIvector(self.masses_np,self.massesCenter_np,self.Inertia_np)
-        print("error2 = {0}\n".format(tau_ext-ttt))
-
-        q = cs.SX.sym('q', 7, 1)
-        qd = cs.SX.sym('qd', 7, 1)
-        qdd = cs.SX.sym('qdd', 7, 1)
-
-        # tttt = self.robot.rnea(q,qd,qdd)
-
-        # print("error3= {0}\n".format(tau_ext-tttt))
-
-        # Y = self.Ymat(q_np,qd_np,qdd_np)
-        # Q, R = optas.qr(Y)
-        # print("Q = {0}".format(Q))
-        # print("R = {0}".format(R))
-
-
-
-        # print("Y_mat = {0}\n ".format(self.Ymat(q_np,qd_np,qdd_np)))
-        
-
+        # real_pam=self.PIvector(self.masses_np,self.massesCenter_np,self.Inertia_np)
 
 
 
@@ -578,8 +502,11 @@ class Estimator(Node):
 def main(args=None):
     rclpy.init(args=args)
     paraEstimator = Estimator()
-    paraEstimator.timer_cb_regressor()
-    # rclpy.spin(paraEstimator)
+    positions, velocities, efforts = paraEstimator.ExtractFromCsv()
+    estimate_pam = paraEstimator.timer_cb_regressor(positions, velocities, efforts)
+    print("estimate_pam = {0}".format(estimate_pam))
+    paraEstimator.testWithEstimatedPara(positions, velocities, efforts,estimate_pam)
+
     rclpy.shutdown()
 
 
