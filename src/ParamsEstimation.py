@@ -738,10 +738,10 @@ def main(args=None):
     a,b = paraEstimator.generate_opt_traj()
     print("a = {0} \n b = {1}".format(a,b))
 
-    # positions, velocities, efforts = paraEstimator.ExtractFromCsv()
-    # estimate_pam = paraEstimator.timer_cb_regressor(positions, velocities, efforts)
-    # print("estimate_pam = {0}".format(estimate_pam))
-    # paraEstimator.testWithEstimatedPara(positions, velocities, efforts,estimate_pam)
+    positions, velocities, efforts = paraEstimator.ExtractFromCsv()
+    estimate_pam = paraEstimator.timer_cb_regressor(positions, velocities, efforts)
+    print("estimate_pam = {0}".format(estimate_pam))
+    paraEstimator.testWithEstimatedPara(positions, velocities, efforts,estimate_pam)
 
     rclpy.shutdown()
 
