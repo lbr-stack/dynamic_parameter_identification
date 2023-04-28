@@ -19,6 +19,7 @@ import csv
 import pathlib
 
 import urdf_parser_py.urdf as urdf
+import math
 
 Order = [4,1,2,3,5,6,7]
 
@@ -279,6 +280,44 @@ def find_dyn_parm_deps(dof, parm_num, regressor_func):
 
     return Pb, Pd, Kd
 
+class FourierSeries():
+    def __init__(self, Rank = 5, channel = 7,
+                 bias=[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], 
+                 ff = 0.01) -> None:
+        assert channel == len(bias), "Different size of Rank and bias!"
+        
+        # self.a = cs.SX.sym('a', Rank,channel)
+        # self.b = cs.SX.sym('b', Rank,channel)
+        self.Rank = Rank
+        self.bias = bias
+        self.ff =ff
+        self.channel = channel
+
+
+    # def value(self, t):
+    #     q = self.bias
+    #     for i in range(self.channel):
+    #         for l in range(self.Rank):
+    #             wl = (l * self.ff* math.pi* 2.0) 
+    #             q[i] = q[i] + self.a[l,i]/wl * cs.sin(wl * t) 
+    #             - self.b[l,i] * cs.cos(wl * t)
+
+    #     return q
+    
+    def FourierFunction(self, t, a, b):
+        q = self.bias
+        for i in range(self.channel):
+            for l in range(self.Rank):
+                wl = (l * self.ff* math.pi* 2.0) 
+                q[i] = q[i] + a[l,i]/wl * cs.sin(wl * t) 
+                - b[l,i] * cs.cos(wl * t)
+
+        return cs.Function('FourierFunction', [a, b, t], q)
+
+
+
+
+
 
 
 class Estimator(Node):
@@ -395,6 +434,161 @@ class Estimator(Node):
         # print("pos = {0}".format(pos))
         
         return pos, vel, eff
+    
+    def generate_opt_traj(self, t = 10, 
+                          sampling_rate=100, Rank=5, 
+                          q_min=-np.ones(7), q_max =np.ones(7),
+                          q_vmin=-0.1*np.ones(7),q_vmax=0.1*np.ones(7)):
+
+        Pb, Pd, Kd =find_dyn_parm_deps(7,80,self.Ymat)
+
+        Ff = 0.01
+        sampling_rate = 1.0
+        pointsNum = int(sampling_rate/Ff)
+
+        fourierInstance = FourierSeries(ff = Ff)
+
+        a = cs.SX.sym('a', 5,7)
+        b = cs.SX.sym('b', 5,7)
+        t = cs.SX.sym('t', 1)
+
+        fourierF = fourierInstance.FourierFunction(t, a, b)
+        fourier = fourierF(a,b,t)
+
+        fourierDot = [optas.jacobian(fourier[i],t) for i in range(len(fourier))]
+        fourierDDot = [optas.jacobian(fourierDot[i],t) for i in range(len(fourierDot))]
+
+        print(fourierDot)
+
+        Y_ = []
+        Y_fri = []
+        for k in range(pointsNum):
+            # print("q_np = {0}".format(q_np))
+            # q_np = np.random.uniform(-1.5, 1.5, size=7)
+            tc = 1.0/sampling_rate * k
+            q_list = [optas.substitute(id, t, tc) for id in fourier]#fourier(a,b,tc)
+            qd_list = [optas.substitute(id, t, tc) for id in fourierDot] #fourierDot(a,b,tc)
+            qdd_list = [optas.substitute(id, t, tc) for id in fourierDDot]#fourierDDot(a,b,tc)
+            q = cs.vertcat(*q_list)
+            qd = cs.vertcat(*qd_list)
+            qdd = cs.vertcat(*qdd_list)
+
+
+            Y_temp = self.Ymat(q,
+                               qd,
+                               qdd) @Pb 
+            #[cs.sign(item) for item in qd_list])
+            fri_ = cs.diag(cs.sign(qd))
+            fri_ = cs.horzcat(fri_,  cs.diag(qd))
+            # fri_ = [[np.sign(v), v] for v in qd_np]
+            
+            Y_.append(Y_temp)
+            # q_nps.append(q_np)
+            # qd_nps.append(qd_np)
+            # qdd_nps.append(qdd_np)
+            # taus.append(tau_ext)
+            Y_fri.append(fri_)
+
+        Y_r = optas.vertcat(*Y_)
+        Y_fri1 = optas.vertcat(*Y_fri)
+
+        Y = cs.horzcat(Y_r, Y_fri1)
+
+        # print(Y)
+        a_eq1 = [0.0]*7
+        a_eq2 = [0.0]*7
+        b_eq1 = [0.0]*7
+        ab_sq_ineq1 = [0.0]*7
+        ab_sq_ineq2 = [0.0]*7
+        ab_sq_ineq3 = []
+
+        lbg1 = []
+        lbg2 = []
+        lbg3 = []
+        lbg4 = []
+        lbg5 = []
+        lbg6 = []
+        
+
+        ubg1 = []
+        ubg2 = []
+        ubg3 = []
+        ubg4 = []
+        ubg5 = []
+        ubg6 = []
+        # ab_sq_ineq4 = []
+        for i in range(7):
+            for l in range(5):
+                print("iter {0}, {1}".format(i, l))
+                a_eq1[i] = a_eq1[i] + a[l,i]/(l+1)
+                b_eq1[i] = b_eq1[i] + b[l,i]
+                a_eq2[i] = a_eq1[i] + a[l,i]*(l+1)
+
+                wl = ((l+1) * Ff* math.pi* 2.0) 
+                ab_sq_ineq1[i] = (ab_sq_ineq1[i]+ 
+                1.0/(wl)* cs.sqrt(a[l,i]*a[l,i] + b[l,i]*b[l,i]))
+
+                ab_sq_ineq2[i] = (ab_sq_ineq1[i]+ 
+                cs.sqrt(a[l,i]*a[l,i] + b[l,i]*b[l,i]))
+
+                ab_sq_ineq3.append(a[l,i])
+                ab_sq_ineq3.append(b[l,i])
+
+                cpr = max((l+1)*Ff/5.0*q_min[i],q_vmin[i])
+                cpr2 = min((l+1)*Ff/5.0*q_max[i],q_vmax[i])
+                lbg6.append(cpr)
+                lbg6.append(cpr)
+
+                ubg6.append(cpr2)
+                ubg6.append(cpr2)
+
+            lbg1.append(0.0)
+            lbg2.append(0.0)
+            lbg3.append(0.0)
+            lbg4.append(0.0)
+            lbg5.append(0.0)
+
+            ubg1.append(0.0)
+            ubg2.append(0.0)
+            ubg3.append(0.0)
+            ubg4.append(q_max[i])
+            ubg5.append(q_vmax[i])
+
+            # lbg.append(0.0)
+            # lbg.append(0.0)
+            # lbg.append(0.0)
+            # lbg.append(0.0)
+            # lbg.append(0.0)
+
+
+
+        g = cs.vertcat(*(a_eq1+  a_eq2+  b_eq1+  ab_sq_ineq1+ ab_sq_ineq2 + ab_sq_ineq3))
+        lbg = cs.vertcat(*(lbg1,lbg2,lbg3,lbg4,lbg5,lbg6))
+        ubg = cs.vertcat(*(ubg1,ubg2,ubg3,ubg4,ubg5,ubg6))
+
+        # print("sol['x'] = {0}".format(sol['x']),flush= True)
+        A = Y.T @ Y
+
+        print("A = {0}".format(A.shape))
+        f = cs.trace(A)
+        x = cs.reshape(cs.vertcat(a,b),(1, 70))
+
+        # print("x = {0}".format(x))
+        # print("a = {0}, b ={1}".format(a,b))
+        # print(" xx= {0},  {1}".format(x_split1,x_split2))
+        problem = {'x': x,'f':f, 'g': g}
+        S = cs.qpsol('solver', 'qpoases', problem)
+
+        sol = S(x0 = 0.005*np.ones([1,70]),lbg = lbg, ubg = ubg)
+
+        x_split1,x_split2 = cs.vertsplit(cs.reshape(sol['x'],(10,7)),5)
+        # print("sol['x'] = {0}".format(sol['x']),flush= True)
+
+        print("sol = {0}".format(sol['x']))
+
+        return x_split1,x_split2
+        # return sol['x']
+
 
     
 
@@ -436,9 +630,9 @@ class Estimator(Node):
             # fri_ = [[np.sign(v), v] for v in qd_np]
             
             Y_.append(Y_temp)
-            q_nps.append(q_np)
-            qd_nps.append(qd_np)
-            qdd_nps.append(qdd_np)
+            # q_nps.append(q_np)
+            # qd_nps.append(qd_np)
+            # qdd_nps.append(qdd_np)
             taus.append(tau_ext)
             Y_fri.append(np.asarray(fri_))
             
@@ -446,9 +640,9 @@ class Estimator(Node):
 
         
         Y_r = optas.vertcat(*Y_)
-        q_nps1 = np.hstack(q_nps)
-        qd_nps1 = np.hstack(qd_nps)
-        qdd_nps1 = np.hstack(qdd_nps)
+        # q_nps1 = np.hstack(q_nps)
+        # qd_nps1 = np.hstack(qd_nps)
+        # qdd_nps1 = np.hstack(qdd_nps)
         taus1 = np.hstack(taus)
         Y_fri1 = np.vstack(Y_fri)
         print("Y_fri1 = {0}".format(Y_fri1))
@@ -458,9 +652,9 @@ class Estimator(Node):
         # solution=self.regress(init_para, q_nps1,qd_nps1,qdd_nps1,taus1)
         # print("solution = {0}".format(solution[f"{self.pam_name}/y"]))
 
-        print("taus1 size = {0}".format(taus1.shape))
-        print("q_nps1 size = {0}".format(q_nps1.shape))
-        print("qd_nps1 size = {0}".format(qd_nps1.shape))
+        # print("taus1 size = {0}".format(taus1.shape))
+        # print("q_nps1 size = {0}".format(q_nps1.shape))
+        # print("qd_nps1 size = {0}".format(qd_nps1.shape))
 
 
         taus1 = taus1.T
@@ -541,10 +735,13 @@ class Estimator(Node):
 def main(args=None):
     rclpy.init(args=args)
     paraEstimator = Estimator()
-    positions, velocities, efforts = paraEstimator.ExtractFromCsv()
-    estimate_pam = paraEstimator.timer_cb_regressor(positions, velocities, efforts)
-    print("estimate_pam = {0}".format(estimate_pam))
-    paraEstimator.testWithEstimatedPara(positions, velocities, efforts,estimate_pam)
+    a,b = paraEstimator.generate_opt_traj()
+    print("a = {0} \n b = {1}".format(a,b))
+
+    # positions, velocities, efforts = paraEstimator.ExtractFromCsv()
+    # estimate_pam = paraEstimator.timer_cb_regressor(positions, velocities, efforts)
+    # print("estimate_pam = {0}".format(estimate_pam))
+    # paraEstimator.testWithEstimatedPara(positions, velocities, efforts,estimate_pam)
 
     rclpy.shutdown()
 
