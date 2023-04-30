@@ -20,6 +20,7 @@ import pathlib
 
 import urdf_parser_py.urdf as urdf
 import math
+import copy
 
 Order = [4,1,2,3,5,6,7]
 
@@ -236,6 +237,36 @@ def DynamicLinearlization(dynamics_,Nb):
 
     return Ymat, PIvector
 
+def find_eigen_value(dof, parm_num, regressor_func,shape):
+    '''
+    Find dynamic parameter dependencies (i.e., regressor column dependencies).
+    '''
+
+    samples = 100
+    round = 10
+
+    pi = np.pi
+
+    # Z = np.zeros((dof * samples, parm_num))
+    A_mat = np.zeros(( shape,shape ))
+
+    for i in range(samples):
+        a = np.random.random([parm_num,dof])*2.0-1.0
+        b = np.random.random([parm_num,dof])*2.0-1.0
+
+        A_mat = A_mat+ regressor_func(a,b)
+
+    print("U V finished")
+    U, s, V = np.linalg.svd(A_mat)
+        # Z[i * dof: i * dof + dof, :] = np.matrix(
+        #     regressor_func(q, dq, ddq)).reshape(dof, parm_num)
+
+    # R1_diag = np.linalg.qr(Z, mode='r').diagonal().round(round)
+    
+
+    return U,V
+
+
 
 
 def find_dyn_parm_deps(dof, parm_num, regressor_func):
@@ -304,15 +335,25 @@ class FourierSeries():
 
     #     return q
     
-    def FourierFunction(self, t, a, b):
-        q = self.bias
+    def FourierFunction(self, t, a, b, name):
+        q = copy.deepcopy(self.bias)
         for i in range(self.channel):
             for l in range(self.Rank):
-                wl = (l * self.ff* math.pi* 2.0) 
+                wl = ((l+1) * self.ff* math.pi* 2.0) 
                 q[i] = q[i] + a[l,i]/wl * cs.sin(wl * t) 
                 - b[l,i] * cs.cos(wl * t)
 
-        return cs.Function('FourierFunction', [a, b, t], q)
+        return cs.Function(name, [a, b, t], q)
+    
+    def FourierValue(self, a,b,t):
+        q = copy.deepcopy(self.bias)
+        for i in range(self.channel):
+            for l in range(self.Rank):
+                wl = ((l+1) * self.ff* math.pi* 2.0) 
+                q[i] = q[i] + a[l,i]/wl * np.sin(wl * t) 
+                - b[l,i] * np.cos(wl * t)
+
+        return q
 
 
 
@@ -435,15 +476,14 @@ class Estimator(Node):
         
         return pos, vel, eff
     
-    def generate_opt_traj(self, t = 10, 
-                          sampling_rate=100, Rank=5, 
+    def generate_opt_traj(self,Ff = 0.01, sampling_rate=1, Rank=5, 
                           q_min=-np.ones(7), q_max =np.ones(7),
                           q_vmin=-0.1*np.ones(7),q_vmax=0.1*np.ones(7)):
 
         Pb, Pd, Kd =find_dyn_parm_deps(7,80,self.Ymat)
 
-        Ff = 0.01
-        sampling_rate = 1.0
+        
+        sampling_rate = 0.1
         pointsNum = int(sampling_rate/Ff)
 
         fourierInstance = FourierSeries(ff = Ff)
@@ -452,7 +492,7 @@ class Estimator(Node):
         b = cs.SX.sym('b', 5,7)
         t = cs.SX.sym('t', 1)
 
-        fourierF = fourierInstance.FourierFunction(t, a, b)
+        fourierF = fourierInstance.FourierFunction(t, a, b,'f1')
         fourier = fourierF(a,b,t)
 
         fourierDot = [optas.jacobian(fourier[i],t) for i in range(len(fourier))]
@@ -570,14 +610,26 @@ class Estimator(Node):
         A = Y.T @ Y
 
         print("A = {0}".format(A.shape))
-        f = cs.trace(A)
+        print("Y = {0}".format(Y.shape))
+        # raise ValueError("Run to here")
+
+        A_fun = optas.Function('A_fun',[a,b],[A])
+
+        shape = A.shape[0]
+        # f = cs.fmax(*A)
+        U, V = find_eigen_value(7,5,A_fun,shape)
+        A_reform = U.T @ A @ V.T
+        f = -A_reform[0,0]/A_reform[-1,-1]
         x = cs.reshape(cs.vertcat(a,b),(1, 70))
 
         # print("x = {0}".format(x))
         # print("a = {0}, b ={1}".format(a,b))
         # print(" xx= {0},  {1}".format(x_split1,x_split2))
         problem = {'x': x,'f':f, 'g': g}
-        S = cs.qpsol('solver', 'qpoases', problem)
+        # S = cs.qpsol('solver', 'qpoases', problem)
+
+        
+        S = cs.nlpsol('S', 'ipopt', problem,{'ipopt':{'max_iter':500 }, 'verbose':True})
 
         sol = S(x0 = 0.005*np.ones([1,70]),lbg = lbg, ubg = ubg)
 
@@ -586,8 +638,81 @@ class Estimator(Node):
 
         print("sol = {0}".format(sol['x']))
 
-        return x_split1,x_split2
+        return x_split1.full(),x_split2.full()
         # return sol['x']
+
+    def generateToCsv(self, a, b,Ff = 0.01, sampling_rate=100):
+        
+        assert a.shape == b.shape
+
+        path1 = "/tmp/target_joint_states.csv"
+
+        fourierInstance1 = FourierSeries(ff = Ff)
+
+        cs_a = cs.SX.sym('ca', 5,7)
+        cs_b = cs.SX.sym('cb', 5,7)
+        t = cs.SX.sym('tt', 1)
+
+        fourierF = fourierInstance1.FourierFunction(t, cs_a, cs_b,'f2')
+
+        fourier = fourierF(cs_a,cs_b,t)
+
+        # _f = optas.Function('fun',[t],_fourier)
+
+
+
+        # fourier = [_fourier[i] for i in range(len(_fourier))]
+        # _f = optas.Function('fun',[cs_a,cs_b,t],fourier)
+
+        fourierDot = [optas.jacobian(fourier[i],t) for i in range(len(fourier))]
+        _fDot = optas.Function('fund',[cs_a,cs_b,t],fourierDot)
+        # fourierDDot = [optas.jacobian(fourierDot[i],t) for i in range(len(fourierDot))]
+
+        pointsNum = int(sampling_rate/Ff)
+        Ts = 1.0/Ff
+
+        keys = ["lbr_joint_0", "lbr_joint_1", "lbr_joint_2", "lbr_joint_3", "lbr_joint_4", "lbr_joint_5", "lbr_joint_6",
+                "lbr_joint_0v", "lbr_joint_1v", "lbr_joint_2v", "lbr_joint_3v", "lbr_joint_4v", "lbr_joint_5v", "lbr_joint_6v"]
+        values_list = []
+        for k in range(pointsNum):
+            tc = 1.0/sampling_rate * k
+            # f = fourierF(np.asarray(a),np.asarray(b),tc)
+            # f = _f(tc)
+            print("b = {0}".format(b))
+            f_temp =fourierInstance1.FourierValue(a,b,tc)
+            print("f_temp = {0}".format(f_temp))
+            fd_temp=_fDot(np.asarray(a),np.asarray(b),tc)
+            
+            q_list = [float(id) for id in f_temp]#fourier(a,b,tc)
+            qd_list = [float(id) for id in fd_temp] #fourierDot(a,b,tc)
+
+            print("q_list = {0}".format(q_list))
+            print("qd_list = {0}".format(qd_list))
+
+
+            values_list.append(q_list + qd_list)
+            # if os.path.isfile(path1):
+        with open(path1,"w") as csv_file:
+            self.save_(csv_file,keys,values_list)
+            # else:
+            #     with open(path1,"a") as csv_file:
+            #         self.save_(csv_file,keys,values_list)
+
+        return True
+    
+    def save_(
+        self, csv_file, keys: List[str], values_list: List[List[float]]
+    ) -> None:
+        # # save data to csv
+        # full_path = os.path.join(path, file_name)
+        # self.get_logger().info(f"Saving to {full_path}...")
+        # with open(full_path, "w") as csv_file:
+        csv_writer = csv.DictWriter(csv_file, fieldnames=keys)
+
+        csv_writer.writeheader()
+        # for values in values_list:
+        for values in values_list:
+            csv_writer.writerow({key: value for key, value in zip(keys,values)})
 
 
     
@@ -736,12 +861,18 @@ def main(args=None):
     rclpy.init(args=args)
     paraEstimator = Estimator()
     a,b = paraEstimator.generate_opt_traj()
-    print("a = {0} \n b = {1}".format(a,b))
+    print("a = {0} \n b = {1}".format(type(a),type(b)))
+    # a, b = np.ones([5,7]),np.ones([5,7])
+    # print("a = {0} \n b = {1}".format(type(a),type(b)))
 
-    positions, velocities, efforts = paraEstimator.ExtractFromCsv()
-    estimate_pam = paraEstimator.timer_cb_regressor(positions, velocities, efforts)
-    print("estimate_pam = {0}".format(estimate_pam))
-    paraEstimator.testWithEstimatedPara(positions, velocities, efforts,estimate_pam)
+    # ret = paraEstimator.generateToCsv(a,b)
+
+
+
+    # positions, velocities, efforts = paraEstimator.ExtractFromCsv()
+    # estimate_pam = paraEstimator.timer_cb_regressor(positions, velocities, efforts)
+    # print("estimate_pam = {0}".format(estimate_pam))
+    # paraEstimator.testWithEstimatedPara(positions, velocities, efforts,estimate_pam)
 
     rclpy.shutdown()
 
