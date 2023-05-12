@@ -22,11 +22,56 @@ import urdf_parser_py.urdf as urdf
 import math
 import copy
 
-Order = [4,1,2,3,5,6,7]
+# Order = [4,1,2,3,5,6,7]
+Order = [0,1,2,3,4,5,6]
 
 # def GetOrder(file_path):
 
 #     return order
+
+def sign(x):
+    if x > 0:
+        return 1
+    elif x < 0:
+        return -1
+    else:
+        return 0
+
+def fhan(x1, x2, u, r, h):
+    d = r * h
+    d0 = d* h
+    y = x1 - u+h*x2
+    a0 = math.sqrt(d*d + 8*r*abs(y))
+
+    if abs(y) <= d0:
+        a = x2 + y/h
+    else:
+        a = x2+0.5*(a0-d)*sign(y)
+
+    if abs(a)<=d:
+        return -r*a/d
+    else:
+        return -r*sign(a)
+    
+class TD_2order:
+    def __init__(self, T=0.01, r=10.0, h=0.1):
+        self.x1 = None
+        self.y1 = None
+        self.T = T
+        self.r = r
+        self.h = h
+
+    def __call__(self, u):
+        if self.x1 is None or self.x2 is None:
+            self.x1 = 0
+            self.x2 = 0
+
+        x1k = self.x1
+        x2k = self.x2
+        self.x1 = x1k + self.T* x2k
+        self.x2 = x2k + self.T* fhan(x1k, x2k, u, self.r, self.h)
+
+        return self.x1, self.x2
 
 
 def RNEA_function(Nb,Nk,rpys,xyzs,axes):
@@ -266,6 +311,38 @@ def find_eigen_value(dof, parm_num, regressor_func,shape):
 
     return U,V
 
+def getJointParametersfromURDF(robot, ee_link="lbr_link_ee"):
+    robot_urdf = robot.urdf
+    root = robot_urdf.get_root()
+    # ee_link = "lbr_link_ee"
+    xyzs, rpys, axes = [], [], []
+
+
+    joints_list = robot_urdf.get_chain(root, ee_link, links=False)
+    # print("joints_list = {0}"
+    #         .format(joints_list)
+    #         )
+    # assumption: The first joint is fixed. The information in this joint is not recorded
+    """
+    xyzs starts from joint 0 to joint ee
+    rpys starts from joint 0 to joint ee
+    axes starts from joint 0 to joint ee
+    """
+    joints_list_r = joints_list[1:]
+    for joint_name in joints_list_r:
+        print(joint_name)
+        joint = robot_urdf.joint_map[joint_name]
+        xyz, rpy = robot.get_joint_origin(joint)
+        axis = robot.get_joint_axis(joint)
+
+        # record the kinematic parameters
+        xyzs.append(xyz)
+        rpys.append(rpy)
+        axes.append(axis)
+    print("xyz, rpy, axis = {0}, {1} ,{2}".format(xyzs, rpys, axes))
+
+    Nb = len(joints_list_r)-1
+    return Nb, xyzs, rpys, axes
 
 
 
@@ -383,36 +460,37 @@ class Estimator(Node):
             xacro_filename=path,
             time_derivs=[1],  # i.e. joint velocity
         )
-        root = self.robot.urdf.get_root()
-        ee_link = "lbr_link_ee"
-        xyzs, rpys, axes = [], [], []
+        # root = self.robot.urdf.get_root()
+        # ee_link = "lbr_link_ee"
+        # xyzs, rpys, axes = [], [], []
 
 
-        joints_list = self.robot.urdf.get_chain(root, ee_link, links=False)
-        print("joints_list = {0}"
-              .format(joints_list)
-              )
-        # assumption: The first joint is fixed. The information in this joint is not recorded
-        """
-        xyzs starts from joint 0 to joint ee
-        rpys starts from joint 0 to joint ee
-        axes starts from joint 0 to joint ee
-        """
-        joints_list_r = joints_list[1:]
-        for joint_name in joints_list_r:
-            print(joint_name)
-            joint = self.robot.urdf.joint_map[joint_name]
-            xyz, rpy = self.robot.get_joint_origin(joint)
-            axis = self.robot.get_joint_axis(joint)
+        # joints_list = self.robot.urdf.get_chain(root, ee_link, links=False)
+        # print("joints_list = {0}"
+        #       .format(joints_list)
+        #       )
+        # # assumption: The first joint is fixed. The information in this joint is not recorded
+        # """
+        # xyzs starts from joint 0 to joint ee
+        # rpys starts from joint 0 to joint ee
+        # axes starts from joint 0 to joint ee
+        # """
+        # joints_list_r = joints_list[1:]
+        # for joint_name in joints_list_r:
+        #     print(joint_name)
+        #     joint = self.robot.urdf.joint_map[joint_name]
+        #     xyz, rpy = self.robot.get_joint_origin(joint)
+        #     axis = self.robot.get_joint_axis(joint)
 
-            # record the kinematic parameters
-            xyzs.append(xyz)
-            rpys.append(rpy)
-            axes.append(axis)
-        print("xyz, rpy, axis = {0}, {1} ,{2}".format(xyzs, rpys, axes))
-
+        #     # record the kinematic parameters
+        #     xyzs.append(xyz)
+        #     rpys.append(rpy)
+        #     axes.append(axis)
+        # print("xyz, rpy, axis = {0}, {1} ,{2}".format(xyzs, rpys, axes))
         
-        Nb = len(joints_list_r)-1
+        # Nb = len(joints_list_r)-1
+
+        Nb, xyzs, rpys, axes = getJointParametersfromURDF(self.robot)
         self.dynamics_ = RNEA_function(Nb,1,rpys,xyzs,axes)
         self.Ymat, self.PIvector = DynamicLinearlization(self.dynamics_,Nb)
 
@@ -475,6 +553,50 @@ class Estimator(Node):
         # print("pos = {0}".format(pos))
         
         return pos, vel, eff
+    
+    def ExtractFromMeasurmentCsv(self):
+        path_pos = os.path.join(
+            get_package_share_directory("gravity_compensation"),
+            "test",
+            "measurements_with_ext_tau.csv",
+        )
+
+        # path_vel = os.path.join(
+        #     get_package_share_directory("gravity_compensation"),
+        #     "test",
+        #     "joint_states_velocities.csv",
+        # )
+
+        # path_eff = os.path.join(
+        #     get_package_share_directory("gravity_compensation"),
+        #     "test",
+        #     "joint_states_efforts.csv",
+        # )
+        dt = 0.01
+        pos_l = []
+        tau_ext_l = []
+        with open(path_pos) as csv_file:
+            csv_reader = csv.DictReader(csv_file)
+            for row in csv_reader:
+                # print("111 = {0}".format(row.values()))
+                pl = list(row.values())[0:7]
+                tl = list(row.values())[7:14]
+                joint_names = [x.strip() for x in list(row.keys())]
+                pos_l.append([float(x) for x in pl])
+                tau_ext_l.append([float(x) for x in tl])
+
+        vel_l =[]
+        filter = TD_2order(T=0.01)
+        for id in range(len(pos_l)):
+            if id == 0:
+                vel_l.append([0.0, 0.0,0.0, 0.0,0.0, 0.0,0.0])
+            else:
+                vel_l.append([(p-p_1)/dt for (p,p_1) in zip(pos_l[id],pos_l[id-1])])
+
+
+
+        return pos_l,vel_l,tau_ext_l    
+        
     
     def generate_opt_traj(self,Ff, sampling_rate, Rank=5, 
                           q_min=-20.0*np.ones(7), q_max =20.0*np.ones(7),
@@ -758,16 +880,20 @@ class Estimator(Node):
         Y_fri = []
         init_para = np.random.uniform(0.0, 0.1, size=50)
         
-        for k in range(300,len(positions),1):
+        for k in range(0,len(positions),1):
             # print("q_np = {0}".format(q_np))
             # q_np = np.random.uniform(-1.5, 1.5, size=7)
             q_np = [positions[k][i] for i in Order]
+            # print("velocities[k] = {0}".format(velocities[k]))
             qd_np = [velocities[k][i] for i in Order]
             tau_ext = [efforts[k][i] for i in Order]
 
             qdlast_np = [velocities[k-1][i] for i in Order]
-            qdd_np = (np.array(qd_np)-np.array(qdlast_np))/(velocities[k][0]-velocities[k-1][0])
+            # qdd_np = (np.array(qd_np)-np.array(qdlast_np))/(velocities[k][0]-velocities[k-1][0])
+            filter_list = [TD_2order(T=0.01) for i in range(len(qd_np))]
+            qdd_np = (np.array(qd_np)-np.array(qdlast_np))/0.01
             qdd_np = qdd_np.tolist()
+            # qdd_np = [f(qd_np[id])[1] for id,f in enumerate(filter_list)]
             
             # qd_np = np.random.uniform(-0.2, 0.2, size=7)
             # qdd_np = np.random.uniform(-0.1, 0.1, size=7)
@@ -828,13 +954,17 @@ class Estimator(Node):
 
         ref_pam = K @ self.PIvector(self.masses_np,self.massesCenter_np,self.Inertia_np)
         
-        lb = 0.5*ref_pam
-        ub = 1.5*ref_pam
+        # lb = 0.5*ref_pam
+        # ub = 1.5*ref_pam
+
+        lb = 0.3*ref_pam
+        ub = -0.3*ref_pam
 
         ineq_constr = [estimate_cs[i] >= lb[i] for i in range(50)] + [estimate_cs[i] <= ub[i] for i in range(50)]
 
         problem = {'x': estimate_cs, 'f': obj, 'g': cs.vertcat(*ineq_constr)}
         solver = cs.qpsol('solver', 'qpoases', problem)
+        # solver = cs.nlpsol('S', 'ipopt', problem,{'ipopt':{'max_iter':1500 }, 'verbose':True})
         print("solver = {0}".format(solver))
         sol = solver()
 
@@ -859,8 +989,12 @@ class Estimator(Node):
             tau_ext = [efforts[k][i] for i in Order]
 
             qdlast_np = [velocities[k-1][i] for i in Order]
-            qdd_np = (np.array(qd_np)-np.array(qdlast_np))/(velocities[k][0]-velocities[k-1][0])
+            # qdd_np = (np.array(qd_np)-np.array(qdlast_np))/0.01#(velocities[k][0]-velocities[k-1][0])
+            # qdd_np = qdd_np.tolist()
+            filter_list = [TD_2order(T=0.01) for i in range(len(qd_np))]
+            qdd_np = (np.array(qd_np)-np.array(qdlast_np))/0.01
             qdd_np = qdd_np.tolist()
+            # qdd_np = [f(qd_np[id])[1] for id,f in enumerate(filter_list)]
 
             # tau_ext = self.robot.rnea(q_np,qd_np,qdd_np)
             # e=self.Ymat(q_np,qd_np,qdd_np)@Pb @ (solution[f"{self.pam_name}/y"] -  K @real_pam)
@@ -872,6 +1006,53 @@ class Estimator(Node):
                 np.diag(qd_np) @ para[57:]) - tau_ext 
             print("error1 = {0}".format(e))
             print("tau_ext = {0}".format(tau_ext))
+
+
+    def saveEstimatedPara(self, parac)->None:
+
+        path1 = os.path.join(
+            get_package_share_directory("gravity_compensation"),
+            "test",
+            "DynamicParameters.csv",
+        )
+
+        para = parac.toarray().flatten()
+        # Pb, Pd, Kd =find_dyn_parm_deps(7,80,self.Ymat)
+        # K = Pb.T +Kd @Pd.T
+        keys = ["para_{0}".format(idx) for idx in range(len(para))]
+        with open(path1,"w") as csv_file:
+            self.save_(csv_file,keys,[para])
+        
+
+        # for k in range(1,len(positions),1):
+        #     # q_np = positions[k][4,1,2,3,5,6,7]
+        #     # qd_np = velocities[k][4,1,2,3,5,6,7]
+        #     # tau_ext = efforts[k][4,1,2,3,5,6,7]
+        #     # qdd_np = (np.array(velocities[k][4,1,2,3,5,6,7])-np.array(velocities[k-1][4,1,2,3,5,6,7]))/(velocities[k][0]-velocities[k-1][0])
+        #     # qdd_np = qdd_np.tolist()
+
+        #     q_np = [positions[k][i] for i in Order]
+        #     qd_np = [velocities[k][i] for i in Order]
+        #     tau_ext = [efforts[k][i] for i in Order]
+
+        #     qdlast_np = [velocities[k-1][i] for i in Order]
+        #     # qdd_np = (np.array(qd_np)-np.array(qdlast_np))/0.01#(velocities[k][0]-velocities[k-1][0])
+        #     # qdd_np = qdd_np.tolist()
+        #     filter_list = [TD_2order(T=0.01) for i in range(len(qd_np))]
+        #     qdd_np = (np.array(qd_np)-np.array(qdlast_np))/0.01
+        #     qdd_np = qdd_np.tolist()
+        #     # qdd_np = [f(qd_np[id])[1] for id,f in enumerate(filter_list)]
+
+        #     # tau_ext = self.robot.rnea(q_np,qd_np,qdd_np)
+        #     # e=self.Ymat(q_np,qd_np,qdd_np)@Pb @ (solution[f"{self.pam_name}/y"] -  K @real_pam)
+        #     # print("error = {0}".format(e))
+
+        #     # e=self.Ymat(q_np,qd_np,qdd_np)@Pb @  para - tau_ext 
+            # e=(self.Ymat(q_np,qd_np,qdd_np)@Pb @  para[:50] + 
+            #     np.diag(np.sign(qd_np)) @ para[50:57]+ 
+            #     np.diag(qd_np) @ para[57:]) - tau_ext 
+            # print("error1 = {0}".format(e))
+            # print("tau_ext = {0}".format(tau_ext))
 
         # print("taus1 size = {0}".format(taus1.shape))
         # print("q_nps1 size = {0}".format(q_nps1.shape))
@@ -888,23 +1069,24 @@ class Estimator(Node):
 def main(args=None):
     rclpy.init(args=args)
     paraEstimator = Estimator()
-    Ff = 0.01
-    sampling_rate = 1.0
-    a,b = paraEstimator.generate_opt_traj(Ff = Ff,sampling_rate = sampling_rate)
-    print("a = {0} \n b = {1}".format(a,b))
-    # a, b = np.ones([5,7]),np.ones([5,7])
-    # print("a = {0} \n b = {1}".format(type(a),type(b)))
+    # Ff = 0.01
+    # sampling_rate = 1.0
+    # a,b = paraEstimator.generate_opt_traj(Ff = Ff,sampling_rate = sampling_rate)
+    # print("a = {0} \n b = {1}".format(a,b))
+    # # a, b = np.ones([5,7]),np.ones([5,7])
+    # # print("a = {0} \n b = {1}".format(type(a),type(b)))
 
-    ret = paraEstimator.generateToCsv(a,b,Ff = Ff,sampling_rate=sampling_rate*10.0)
-    if ret:
-        print("Done! Congratulations! ")
+    # ret = paraEstimator.generateToCsv(a,b,Ff = Ff,sampling_rate=sampling_rate*100.0)
+    # if ret:
+    #     print("Done! Congratulations! ")
 
 
 
-    # positions, velocities, efforts = paraEstimator.ExtractFromCsv()
-    # estimate_pam = paraEstimator.timer_cb_regressor(positions, velocities, efforts)
-    # print("estimate_pam = {0}".format(estimate_pam))
-    # paraEstimator.testWithEstimatedPara(positions, velocities, efforts,estimate_pam)
+    positions, velocities, efforts = paraEstimator.ExtractFromMeasurmentCsv()
+    estimate_pam = paraEstimator.timer_cb_regressor(positions, velocities, efforts)
+    print("estimate_pam = {0}".format(estimate_pam))
+    paraEstimator.testWithEstimatedPara(positions, velocities, efforts,estimate_pam)
+    paraEstimator.saveEstimatedPara(estimate_pam)
 
     rclpy.shutdown()
 
