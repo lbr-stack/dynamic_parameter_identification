@@ -85,6 +85,7 @@ def RNEA_function(Nb,Nk,rpys,xyzs,axes):
     om0 = cs.DM([0.0,0.0,0.0])
     om0D = cs.DM([0.0,0.0,0.0])
     gravity_para = cs.DM([0.0, 0.0, -9.81])
+    # gravity_para = cs.DM([4.905, 0.0, -8.496])
 
     """
     The definination of joint position from joint0 to joint(Nb-1)
@@ -776,7 +777,7 @@ class Estimator(Node):
 
         # print("Run to here22")
         
-        S = cs.nlpsol('S', 'ipopt', problem,{'ipopt':{'max_iter':500 }, 'verbose':True})
+        S = cs.nlpsol('S', 'ipopt', problem,{'ipopt':{'max_iter':1500 }, 'verbose':True})
         # random.random (size= (3,4))
         sol = S(x0 = 0.5* np.random.random (size= (1,70)),lbg = lbg, ubg = ubg)
         # sol = S(x0 = 0.1*np.ones([1,70]),lbg = lbg, ubg = ubg)
@@ -926,7 +927,9 @@ class Estimator(Node):
         Y_fri1 = np.vstack(Y_fri)
         print("Y_fri1 = {0}".format(Y_fri1))
         print("Y_fri1 = {0}".format(Y_fri1.shape))
-
+        print("Y_r = {0}".format(Y_r.shape))
+        print("Pb = {0}".format(Pb.shape))
+        pa_size = Y_r.shape[1]
         
         # solution=self.regress(init_para, q_nps1,qd_nps1,qdd_nps1,taus1)
         # print("solution = {0}".format(solution[f"{self.pam_name}/y"]))
@@ -944,13 +947,14 @@ class Estimator(Node):
         #opti = cs.Opti()
         # estimate_cs = cs.SX.sym('para', 50+14)
 
-        Y = np.hstack((Y_r, Y_fri1))
+        Y = cs.DM(np.hstack((Y_r, Y_fri1)))
         estimate_pam = np.linalg.inv(Y.T @ Y) @ Y.T @ taus1
         # para_friction = cs.SX.sym('para', 14)
         
 
-        estimate_cs = cs.SX.sym('para', 50+14)
+        estimate_cs = cs.SX.sym('para', pa_size+14)
         obj = cs.sumsqr(taus1 - Y @ estimate_cs)
+        # obj = cs.sumsqr(taus1 )
 
         ref_pam = K @ self.PIvector(self.masses_np,self.massesCenter_np,self.Inertia_np)
         
@@ -960,7 +964,7 @@ class Estimator(Node):
         lb = 0.3*ref_pam
         ub = -0.3*ref_pam
 
-        ineq_constr = [estimate_cs[i] >= lb[i] for i in range(50)] + [estimate_cs[i] <= ub[i] for i in range(50)]
+        ineq_constr = [estimate_cs[i] >= lb[i] for i in range(pa_size)] + [estimate_cs[i] <= ub[i] for i in range(pa_size)]
 
         problem = {'x': estimate_cs, 'f': obj, 'g': cs.vertcat(*ineq_constr)}
         solver = cs.qpsol('solver', 'qpoases', problem)
@@ -1001,9 +1005,10 @@ class Estimator(Node):
             # print("error = {0}".format(e))
 
             # e=self.Ymat(q_np,qd_np,qdd_np)@Pb @  para - tau_ext 
-            e=(self.Ymat(q_np,qd_np,qdd_np)@Pb @  para[:50] + 
-                np.diag(np.sign(qd_np)) @ para[50:57]+ 
-                np.diag(qd_np) @ para[57:]) - tau_ext 
+            pa_size = Pb.shape[1]
+            e=(self.Ymat(q_np,qd_np,qdd_np)@Pb @  para[:pa_size] + 
+                np.diag(np.sign(qd_np)) @ para[pa_size:pa_size+7]+ 
+                np.diag(qd_np) @ para[pa_size+7:]) - tau_ext 
             print("error1 = {0}".format(e))
             print("tau_ext = {0}".format(tau_ext))
 
@@ -1069,24 +1074,24 @@ class Estimator(Node):
 def main(args=None):
     rclpy.init(args=args)
     paraEstimator = Estimator()
-    # Ff = 0.01
-    # sampling_rate = 1.0
-    # a,b = paraEstimator.generate_opt_traj(Ff = Ff,sampling_rate = sampling_rate)
-    # print("a = {0} \n b = {1}".format(a,b))
-    # # a, b = np.ones([5,7]),np.ones([5,7])
-    # # print("a = {0} \n b = {1}".format(type(a),type(b)))
+    Ff = 0.01
+    sampling_rate = 1.0
+    a,b = paraEstimator.generate_opt_traj(Ff = Ff,sampling_rate = sampling_rate)
+    print("a = {0} \n b = {1}".format(a,b))
+    # a, b = np.ones([5,7]),np.ones([5,7])
+    # print("a = {0} \n b = {1}".format(type(a),type(b)))
 
-    # ret = paraEstimator.generateToCsv(a,b,Ff = Ff,sampling_rate=sampling_rate*100.0)
-    # if ret:
-    #     print("Done! Congratulations! ")
+    ret = paraEstimator.generateToCsv(a,b,Ff = Ff,sampling_rate=sampling_rate*100.0)
+    if ret:
+        print("Done! Congratulations! ")
 
 
 
-    positions, velocities, efforts = paraEstimator.ExtractFromMeasurmentCsv()
-    estimate_pam = paraEstimator.timer_cb_regressor(positions, velocities, efforts)
-    print("estimate_pam = {0}".format(estimate_pam))
-    paraEstimator.testWithEstimatedPara(positions, velocities, efforts,estimate_pam)
-    paraEstimator.saveEstimatedPara(estimate_pam)
+    # positions, velocities, efforts = paraEstimator.ExtractFromMeasurmentCsv()
+    # estimate_pam = paraEstimator.timer_cb_regressor(positions, velocities, efforts)
+    # print("estimate_pam = {0}".format(estimate_pam))
+    # paraEstimator.testWithEstimatedPara(positions, velocities, efforts,estimate_pam)
+    # paraEstimator.saveEstimatedPara(estimate_pam)
 
     rclpy.shutdown()
 
