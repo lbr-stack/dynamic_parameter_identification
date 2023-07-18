@@ -16,6 +16,7 @@ install(
     src/EquationDerivationRNEA.py
     src/ParamsEstimation.py
     src/regression.py
+    src/IDmodel.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

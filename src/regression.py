@@ -559,7 +559,7 @@ class Estimator(Node):
         path_pos = os.path.join(
             get_package_share_directory("gravity_compensation"),
             "test",
-            "measurements_with_ext_tau.csv",
+            "measurements_with_ext_tau_4s.csv",
         )
 
         # path_vel = os.path.join(
@@ -587,7 +587,7 @@ class Estimator(Node):
                 tau_ext_l.append([float(x) for x in tl])
 
         vel_l =[]
-        filter = TD_2order(T=0.01)
+        # filter = TD_2order(T=0.01)
         for id in range(len(pos_l)):
             if id == 0:
                 vel_l.append([0.0, 0.0,0.0, 0.0,0.0, 0.0,0.0])
@@ -961,14 +961,14 @@ class Estimator(Node):
         # lb = 0.5*ref_pam
         # ub = 1.5*ref_pam
 
-        lb = 0.3*ref_pam
-        ub = -0.3*ref_pam
+        lb = 0.5*ref_pam
+        ub = -0.5*ref_pam
 
         ineq_constr = [estimate_cs[i] >= lb[i] for i in range(pa_size)] + [estimate_cs[i] <= ub[i] for i in range(pa_size)]
 
         problem = {'x': estimate_cs, 'f': obj, 'g': cs.vertcat(*ineq_constr)}
-        solver = cs.qpsol('solver', 'qpoases', problem)
-        # solver = cs.nlpsol('S', 'ipopt', problem,{'ipopt':{'max_iter':1500 }, 'verbose':True})
+        # solver = cs.qpsol('solver', 'qpoases', problem)
+        solver = cs.nlpsol('S', 'ipopt', problem,{'ipopt':{'max_iter':3000 }, 'verbose':True})
         print("solver = {0}".format(solver))
         sol = solver()
 
