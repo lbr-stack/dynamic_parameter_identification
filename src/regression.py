@@ -56,7 +56,7 @@ def fhan(x1, x2, u, r, h):
 class TD_2order:
     def __init__(self, T=0.01, r=10.0, h=0.1):
         self.x1 = None
-        self.y1 = None
+        self.x2 = None
         self.T = T
         self.r = r
         self.h = h
@@ -72,6 +72,30 @@ class TD_2order:
         self.x2 = x2k + self.T* fhan(x1k, x2k, u, self.r, self.h)
 
         return self.x1, self.x2
+    
+class TD_list_filter:
+    def __init__(self, T=0.01, r=10.0, h=0.1, len = 7) -> None:
+        self.x1_list = None
+        self.x2_list = None
+
+        self.T = T
+        self.r = r
+        self.h = h
+        self.len = len
+
+    def __call__(self, us):
+        if self.x1_list is None or self.x2_list is None:
+            self.x1_list = [0.0] * self.len
+            self.x2_list = [0.0] * self.len
+
+        x1k = np.array(self.x1_list)
+        x2k = np.array(self.x2_list)
+
+        self.x1_list = x1k + self.T *x2k
+        f = np.array([fhan(x1, x2, u, self.r, self.h) for (x1, x2, u) in zip(x1k, x2k, us)])
+        self.x2_list = x2k + self.T *f
+
+        return self.x1_list, self.x2_list
 
 
 def RNEA_function(Nb,Nk,rpys,xyzs,axes):
@@ -559,7 +583,7 @@ class Estimator(Node):
         path_pos = os.path.join(
             get_package_share_directory("gravity_compensation"),
             "test",
-            "measurements_with_ext_tau_4s.csv",
+            "measurements_with_ext_tau.csv",
         )
 
         # path_vel = os.path.join(
@@ -864,8 +888,6 @@ class Estimator(Node):
         # for values in values_list:
         for values in values_list:
             csv_writer.writerow({key: value for key, value in zip(keys,values)})
-
-
     
 
     def timer_cb_regressor(self, positions, velocities, efforts):
@@ -881,6 +903,8 @@ class Estimator(Node):
         Y_fri = []
         init_para = np.random.uniform(0.0, 0.1, size=50)
         
+        filter_list = [TD_2order(T=0.01) for i in range(7)]
+        filter_vector = TD_list_filter(T=0.01)
         for k in range(0,len(positions),1):
             # print("q_np = {0}".format(q_np))
             # q_np = np.random.uniform(-1.5, 1.5, size=7)
@@ -891,10 +915,10 @@ class Estimator(Node):
 
             qdlast_np = [velocities[k-1][i] for i in Order]
             # qdd_np = (np.array(qd_np)-np.array(qdlast_np))/(velocities[k][0]-velocities[k-1][0])
-            filter_list = [TD_2order(T=0.01) for i in range(len(qd_np))]
-            qdd_np = (np.array(qd_np)-np.array(qdlast_np))/0.01
-            qdd_np = qdd_np.tolist()
+            # qdd_np = (np.array(qd_np)-np.array(qdlast_np))/0.01
+            # qdd_np = qdd_np.tolist()
             # qdd_np = [f(qd_np[id])[1] for id,f in enumerate(filter_list)]
+            qdd_np = filter_vector(qd_np)[1]
             
             # qd_np = np.random.uniform(-0.2, 0.2, size=7)
             # qdd_np = np.random.uniform(-0.1, 0.1, size=7)
@@ -981,6 +1005,10 @@ class Estimator(Node):
         Pb, Pd, Kd =find_dyn_parm_deps(7,80,self.Ymat)
         K = Pb.T +Kd @Pd.T
 
+        tau_ests = []
+        es = []
+
+        filter_list = [TD_2order(T=0.01) for i in range(7)]
         for k in range(1,len(positions),1):
             # q_np = positions[k][4,1,2,3,5,6,7]
             # qd_np = velocities[k][4,1,2,3,5,6,7]
@@ -995,10 +1023,9 @@ class Estimator(Node):
             qdlast_np = [velocities[k-1][i] for i in Order]
             # qdd_np = (np.array(qd_np)-np.array(qdlast_np))/0.01#(velocities[k][0]-velocities[k-1][0])
             # qdd_np = qdd_np.tolist()
-            filter_list = [TD_2order(T=0.01) for i in range(len(qd_np))]
-            qdd_np = (np.array(qd_np)-np.array(qdlast_np))/0.01
-            qdd_np = qdd_np.tolist()
-            # qdd_np = [f(qd_np[id])[1] for id,f in enumerate(filter_list)]
+            # qdd_np = (np.array(qd_np)-np.array(qdlast_np))/0.01
+            # qdd_np = qdd_np.tolist()
+            qdd_np = [f(qd_np[id])[1] for id,f in enumerate(filter_list)]
 
             # tau_ext = self.robot.rnea(q_np,qd_np,qdd_np)
             # e=self.Ymat(q_np,qd_np,qdd_np)@Pb @ (solution[f"{self.pam_name}/y"] -  K @real_pam)
@@ -1006,11 +1033,17 @@ class Estimator(Node):
 
             # e=self.Ymat(q_np,qd_np,qdd_np)@Pb @  para - tau_ext 
             pa_size = Pb.shape[1]
-            e=(self.Ymat(q_np,qd_np,qdd_np)@Pb @  para[:pa_size] + 
+            tau_est_model = (self.Ymat(q_np,qd_np,qdd_np)@Pb @  para[:pa_size] + 
                 np.diag(np.sign(qd_np)) @ para[pa_size:pa_size+7]+ 
-                np.diag(qd_np) @ para[pa_size+7:]) - tau_ext 
+                np.diag(qd_np) @ para[pa_size+7:])
+            e= tau_est_model - tau_ext 
             print("error1 = {0}".format(e))
             print("tau_ext = {0}".format(tau_ext))
+
+            tau_ests.append(tau_est_model.toarray().flatten().tolist())
+            es.append(e.toarray().flatten().tolist())
+
+        return tau_ests, es
 
 
     def saveEstimatedPara(self, parac)->None:
@@ -1065,6 +1098,126 @@ class Estimator(Node):
 
         # real_pam=self.PIvector(self.masses_np,self.massesCenter_np,self.Inertia_np)
 
+def view_variables_in_joint_space(states):
+    cols = []
+    l=len(states[0])
+    # print('l = ', states[0])
+    fig, axs = plt.subplots(7, 1, figsize=(8,10))
+    for i in range(l):
+        print("states = {0}".format(states[i]))
+        cols.append(
+            [float(state[i]) for state in states]
+        )
+        axs[i].plot(cols[i])
+
+    plt.subplots_adjust(hspace=0.5)
+    plt.show()
+
+from scipy import signal
+
+
+def view_variables_in_joint_space_with_filter(states):
+    cols = []
+    l=len(states[0])
+    # print('l = ', states[0])
+    
+    fig, axs = plt.subplots(7, 1, figsize=(8,10))
+    
+    fs = 100
+    cutoff_freq = 2  # 截止频率为10 Hz
+    b, a = signal.butter(4, cutoff_freq / (fs / 2), 'low')
+
+
+    for i in range(l):
+        # print("i = ",i)
+        cols.append(
+            [float(state[i]) for state in states]
+        )
+        axs[i].plot(cols[i])
+
+        filtered_signal = signal.filtfilt(b, a, cols[i])
+
+        axs[i].plot(filtered_signal)
+
+
+    plt.subplots_adjust(hspace=0.5)
+    plt.show()
+
+def traj_filter(states):
+    cols = []
+    l=len(states[0])
+
+    fs = 100
+    cutoff_freq = 2  # 截止频率为10 Hz
+    b, a = signal.butter(4, cutoff_freq / (fs / 2), 'low')
+    filtered_signal = []
+    states_filtered = []
+
+
+    for i in range(l):
+        # print("i = ",i)
+        cols.append(
+            [float(state[i]) for state in states]
+        )
+
+        filtered_signal.append( signal.filtfilt(b, a, cols[i]))
+
+
+    for j in range(len(filtered_signal[0])):
+        states_filtered.append([
+            filtered_signal[i][j] for i in range(l)
+        ])
+
+    return states_filtered
+
+
+def acc_calculation_mode_withTD(vels):
+    filter = TD_list_filter(T = 0.01)
+    accs = []
+    for vel in vels:
+        accs.append(filter(vel)[1].tolist())
+
+    return accs
+
+def acc_calculation_mode(vels):
+    return [
+        ((np.array(vel) - np.array(vels[i-1]))/0.01).tolist() if i > 0 else (np.array(vel)/0.01).tolist()
+        for (i, vel) in enumerate(vels)
+    ]
+    # for vel in vels:
+    #     accs.append(
+    #        (vel - vel[i-1])/0.01  
+    #     )
+
+
+
+def compare_traj(states1, states2):
+    col1s , col2s = [], []
+    l=len(states1[0])
+
+    fig, axs = plt.subplots(7, 1, figsize=(8,10))
+
+    for i in range(l):
+        print("states = {0}".format(states2[i]))
+        col1s.append(
+            [float(state[i]) for state in states1]
+        )
+        col2s.append(
+            [float(state[i]) for state in states2]
+        )
+        axs[i].plot(col1s[i])
+        axs[i].plot(col2s[i])
+
+    plt.subplots_adjust(hspace=0.5)
+    plt.show()
+
+
+
+
+    
+
+
+        
 
 
 
@@ -1074,24 +1227,33 @@ class Estimator(Node):
 def main(args=None):
     rclpy.init(args=args)
     paraEstimator = Estimator()
-    # Ff = 0.01
-    # sampling_rate = 1.0
-    # a,b = paraEstimator.generate_opt_traj(Ff = Ff,sampling_rate = sampling_rate)
-    # print("a = {0} \n b = {1}".format(a,b))
-    # # a, b = np.ones([5,7]),np.ones([5,7])
-    # # print("a = {0} \n b = {1}".format(type(a),type(b)))
-
-    # ret = paraEstimator.generateToCsv(a,b,Ff = Ff,sampling_rate=sampling_rate*100.0)
-    # if ret:
-    #     print("Done! Congratulations! ")
-
-
-
     positions, velocities, efforts = paraEstimator.ExtractFromMeasurmentCsv()
-    estimate_pam = paraEstimator.timer_cb_regressor(positions, velocities, efforts)
+    velocities=traj_filter(velocities)
+    efforts_f=traj_filter(efforts)
+
+
+    # accs=acc_calculation_mode(velocities)
+    # accs2=acc_calculation_mode_withTD(velocities)
+    # compare_traj(accs,accs2)
+
+
+    # filter = TD_list_filter(T = 0.01)
+    # velocities_f = []
+    # for vel in efforts:
+    #     velocities_f.append(filter(vel)[0].tolist())
+
+    # compare_traj(velocities_f,efforts_f)
+
+
+    # view_variables_in_joint_space(positions)
+    # view_variables_in_joint_space(velocities)
+    # view_variables_in_joint_space(efforts_f)
+
+    estimate_pam = paraEstimator.timer_cb_regressor(positions, velocities, efforts_f)
     print("estimate_pam = {0}".format(estimate_pam))
-    paraEstimator.testWithEstimatedPara(positions, velocities, efforts,estimate_pam)
-    paraEstimator.saveEstimatedPara(estimate_pam)
+    tau_exts, es =paraEstimator.testWithEstimatedPara(positions, velocities, efforts_f,estimate_pam)
+    # paraEstimator.saveEstimatedPara(estimate_pam)
+    view_variables_in_joint_space(es)
 
     rclpy.shutdown()
 

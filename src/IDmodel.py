@@ -5,6 +5,75 @@ from optas.spatialmath import *
 
 from ament_index_python import get_package_share_directory
 import os
+import math
+
+def sign(x):
+    if x > 0:
+        return 1
+    elif x < 0:
+        return -1
+    else:
+        return 0
+
+def fhan(x1, x2, u, r, h):
+    d = r * h
+    d0 = d* h
+    y = x1 - u+h*x2
+    a0 = math.sqrt(d*d + 8*r*abs(y))
+
+    if abs(y) <= d0:
+        a = x2 + y/h
+    else:
+        a = x2+0.5*(a0-d)*sign(y)
+
+    if abs(a)<=d:
+        return -r*a/d
+    else:
+        return -r*sign(a)
+    
+class TD_2order:
+    def __init__(self, T=0.01, r=10.0, h=0.1):
+        self.x1 = None
+        self.x2 = None
+        self.T = T
+        self.r = r
+        self.h = h
+
+    def __call__(self, u):
+        if self.x1 is None or self.x2 is None:
+            self.x1 = 0
+            self.x2 = 0
+
+        x1k = self.x1
+        x2k = self.x2
+        self.x1 = x1k + self.T* x2k
+        self.x2 = x2k + self.T* fhan(x1k, x2k, u, self.r, self.h)
+
+        return self.x1, self.x2
+    
+class TD_list_filter:
+    def __init__(self, T=0.01, r=10.0, h=0.1, len = 7) -> None:
+        self.x1_list = None
+        self.x2_list = None
+
+        self.T = T
+        self.r = r
+        self.h = h
+        self.len = len
+
+    def __call__(self, us):
+        if self.x1_list is None or self.x2_list is None:
+            self.x1_list = [0.0] * self.len
+            self.x2_list = [0.0] * self.len
+
+        x1k = np.array(self.x1_list)
+        x2k = np.array(self.x2_list)
+
+        self.x1_list = x1k + self.T *x2k
+        f = np.array([fhan(x1, x2, u, self.r, self.h) for (x1, x2, u) in zip(x1k, x2k, us)])
+        self.x2_list = x2k + self.T *f
+
+        return self.x1_list, self.x2_list
 
 
 def ExtractFromParamsCsv(path):
@@ -367,6 +436,8 @@ def main():
     qd = np.array([0.0]*7)
     qdd = np.array([0.0]*7)
 
+    filter = TD_list_filter(T = 0.01)
+
 
     # parameters' path
     path_pos = os.path.join(
@@ -378,7 +449,10 @@ def main():
 
 
     # calculate the tau_estimation
-    tau_est = (Ymat(q.tolist(), qd.tolist(), qdd.tolist()) @ Pb @  params[:pa_size] + 
+    tau_est = (Ymat(q.tolist(), 
+                    qd.tolist(), 
+                    filter(qd.tolist())[1]  # directly compute qdd here.
+                    ) @ Pb @  params[:pa_size] + 
                 np.diag(np.sign(qd)) @ params[pa_size:pa_size+7]+ 
                 np.diag(qdd) @ params[pa_size+7:])
     
