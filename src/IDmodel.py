@@ -450,7 +450,7 @@ def main():
 
     # calculate the tau_estimation
     tau_est = (Ymat(q.tolist(), 
-                    qd.tolist(), 
+                    filter(qd.tolist())[0], 
                     filter(qd.tolist())[1]  # directly compute qdd here.
                     ) @ Pb @  params[:pa_size] + 
                 np.diag(np.sign(qd)) @ params[pa_size:pa_size+7]+ 

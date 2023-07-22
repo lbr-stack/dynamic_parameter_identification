@@ -108,8 +108,8 @@ def RNEA_function(Nb,Nk,rpys,xyzs,axes):
     
     om0 = cs.DM([0.0,0.0,0.0])
     om0D = cs.DM([0.0,0.0,0.0])
-    gravity_para = cs.DM([0.0, 0.0, -9.81])
-    # gravity_para = cs.DM([4.905, 0.0, -8.496])
+    # gravity_para = cs.DM([0.0, 0.0, -9.81])
+    gravity_para = cs.DM([4.905, 0.0, -8.496])
 
     """
     The definination of joint position from joint0 to joint(Nb-1)
@@ -583,7 +583,7 @@ class Estimator(Node):
         path_pos = os.path.join(
             get_package_share_directory("gravity_compensation"),
             "test",
-            "measurements_with_ext_tau.csv",
+            "measurements_with_ext_tau_2.csv",
         )
 
         # path_vel = os.path.join(
@@ -914,11 +914,11 @@ class Estimator(Node):
             tau_ext = [efforts[k][i] for i in Order]
 
             qdlast_np = [velocities[k-1][i] for i in Order]
-            # qdd_np = (np.array(qd_np)-np.array(qdlast_np))/(velocities[k][0]-velocities[k-1][0])
-            # qdd_np = (np.array(qd_np)-np.array(qdlast_np))/0.01
-            # qdd_np = qdd_np.tolist()
+            
+            qdd_np = (np.array(qd_np)-np.array(qdlast_np))/0.01
+            qdd_np = qdd_np.tolist()
             # qdd_np = [f(qd_np[id])[1] for id,f in enumerate(filter_list)]
-            qdd_np = filter_vector(qd_np)[1]
+            # qdd_np = filter_vector(qd_np)[1]
             
             # qd_np = np.random.uniform(-0.2, 0.2, size=7)
             # qdd_np = np.random.uniform(-0.1, 0.1, size=7)
@@ -982,23 +982,26 @@ class Estimator(Node):
 
         ref_pam = K @ self.PIvector(self.masses_np,self.massesCenter_np,self.Inertia_np)
         
-        # lb = 0.5*ref_pam
-        # ub = 1.5*ref_pam
+        # lb = -2.5*ref_pam
+        # ub = 2.5*ref_pam
 
-        lb = 0.5*ref_pam
-        ub = -0.5*ref_pam
+        lb = -10000000.0*np.array([1.0]*(pa_size+14))
+        ub = 10000000.0*np.array([1.0]*(pa_size+14))
+
+        # lb = 0.3*ref_pam
+        # ub = -0.3*ref_pam
 
         ineq_constr = [estimate_cs[i] >= lb[i] for i in range(pa_size)] + [estimate_cs[i] <= ub[i] for i in range(pa_size)]
 
         problem = {'x': estimate_cs, 'f': obj, 'g': cs.vertcat(*ineq_constr)}
         # solver = cs.qpsol('solver', 'qpoases', problem)
-        solver = cs.nlpsol('S', 'ipopt', problem,{'ipopt':{'max_iter':3000 }, 'verbose':True})
+        solver = cs.nlpsol('S', 'ipopt', problem,{'ipopt':{'max_iter':3000000 }, 'verbose':True})
         print("solver = {0}".format(solver))
         sol = solver()
 
         print("sol = {0}".format(sol['x']))
 
-        return sol['x']
+        return sol['x'],estimate_pam
     
     def testWithEstimatedPara(self, positions, velocities, efforts, para)->None:
 
@@ -1021,7 +1024,7 @@ class Estimator(Node):
             tau_ext = [efforts[k][i] for i in Order]
 
             qdlast_np = [velocities[k-1][i] for i in Order]
-            # qdd_np = (np.array(qd_np)-np.array(qdlast_np))/0.01#(velocities[k][0]-velocities[k-1][0])
+            qdd_np = (np.array(qd_np)-np.array(qdlast_np))/0.01#(velocities[k][0]-velocities[k-1][0])
             # qdd_np = qdd_np.tolist()
             # qdd_np = (np.array(qd_np)-np.array(qdlast_np))/0.01
             # qdd_np = qdd_np.tolist()
@@ -1249,11 +1252,11 @@ def main(args=None):
     # view_variables_in_joint_space(velocities)
     # view_variables_in_joint_space(efforts_f)
 
-    estimate_pam = paraEstimator.timer_cb_regressor(positions, velocities, efforts_f)
+    estimate_pam,ref_pam = paraEstimator.timer_cb_regressor(positions, velocities, efforts_f)
     print("estimate_pam = {0}".format(estimate_pam))
     tau_exts, es =paraEstimator.testWithEstimatedPara(positions, velocities, efforts_f,estimate_pam)
-    # paraEstimator.saveEstimatedPara(estimate_pam)
-    view_variables_in_joint_space(es)
+    paraEstimator.saveEstimatedPara(estimate_pam)
+    compare_traj(tau_exts, efforts_f)
 
     rclpy.shutdown()
 
