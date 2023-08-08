@@ -22,12 +22,48 @@ import urdf_parser_py.urdf as urdf
 import math
 import copy
 
+# from CollisionCheck import getConstraintsinJointSpace
+
 # Order = [4,1,2,3,5,6,7]
 Order = [0,1,2,3,4,5,6]
 
 # def GetOrder(file_path):
 
 #     return order
+def getConstraintsinJointSpace(robot,point_coord = [0.]*3,Nb=7, base_link="lbr_link_3", base_joint_name="lbr_A3", ee_link="lbr_link_ee"):
+    q = cs.SX.sym('q', Nb, 1)
+
+    pe = robot.get_global_link_position(ee_link, q)
+    Re = robot.get_global_link_rotation(ee_link, q)
+
+    pb = robot.get_global_link_position(base_link, q)
+    Rb = robot.get_global_link_rotation(base_link, q)
+
+    pp = pe + Re[:,0]*point_coord[0] + Re[:,1]*point_coord[1] + Re[:,2]*point_coord[2]
+
+    robot_urdf = robot.urdf
+    joint = robot_urdf.joint_map[base_joint_name]
+    xyz, _ = robot.get_joint_origin(joint)
+
+    print("robot_urdf.joint_map = ",robot_urdf.joint_map)
+
+    bbox = cs.DM([0.2, 0.2, xyz[2]])
+    p = Rb.T@(pp -pb)
+    x= p[0]
+    y= p[1]
+    z= p[2]
+    c = xyz[2]
+    c = c/2
+    a = 0.15
+    b = 0.15
+    EpVF = x*x/(a*a) + y*y/(b*b) + (z-c)*(z-c)/(c*c)-1
+
+    # constraints = optas.
+
+    p_fun = optas.Function('A_fun',[q],[EpVF])
+
+    
+    return p_fun 
 
 def sign(x):
     if x > 0:
@@ -340,7 +376,8 @@ def getJointParametersfromURDF(robot, ee_link="lbr_link_ee"):
         xyzs.append(xyz)
         rpys.append(rpy)
         axes.append(axis)
-    print("xyz, rpy, axis = {0}, {1} ,{2}".format(xyzs, rpys, axes))
+        # print()
+    # print("xyz, rpy, axis = {0}, {1} ,{2}".format(xyzs, rpys, axes))
 
     Nb = len(joints_list_r)-1
     return Nb, xyzs, rpys, axes
@@ -600,7 +637,7 @@ class Estimator(Node):
         
     
     def generate_opt_traj(self,Ff, sampling_rate, Rank=5, 
-                          q_min=-20.0*np.ones(7), q_max =20.0*np.ones(7),
+                          q_min=-2.0*np.ones(7), q_max =2.0*np.ones(7),
                           q_vmin=-10.0*np.ones(7),q_vmax=10.0*np.ones(7)):
 
         Pb, Pd, Kd =find_dyn_parm_deps(7,80,self.Ymat)
@@ -622,9 +659,27 @@ class Estimator(Node):
         fourierDDot = [optas.jacobian(fourierDot[i],t) for i in range(len(fourierDot))]
 
         print(fourierDot)
+        pfun =getConstraintsinJointSpace(self.robot,point_coord=[-0.25, 0.0, 0.1])
+        pfun1 =getConstraintsinJointSpace(self.robot,point_coord=[-0.07, 0.0, 0.1])
+
+        pfun2 =getConstraintsinJointSpace(self.robot,point_coord=[-0.25, 0.0, 0.1], 
+                                          base_link="lbr_link_4", base_joint_name="lbr_A4")
+        pfun3 =getConstraintsinJointSpace(self.robot,point_coord=[-0.07, 0.0, 0.1],
+                                          base_link="lbr_link_4", base_joint_name="lbr_A4")
+
+        pfun4 =getConstraintsinJointSpace(self.robot,point_coord=[-0.25, 0.0, 0.1], 
+                                          base_link="lbr_link_5", base_joint_name="lbr_A5")
+        pfun5 =getConstraintsinJointSpace(self.robot,point_coord=[-0.07, 0.0, 0.1],
+                                          base_link="lbr_link_5", base_joint_name="lbr_A5")
+        
+        pfun6 =getConstraintsinJointSpace(self.robot,point_coord=[-0.25, 0.0, 0.1], 
+                                          base_link="lbr_link_2", base_joint_name="lbr_A2")
+        pfun7 =getConstraintsinJointSpace(self.robot,point_coord=[-0.07, 0.0, 0.1],
+                                          base_link="lbr_link_2", base_joint_name="lbr_A2")
 
         Y_ = []
         Y_fri = []
+        pfun_list = []
         for k in range(pointsNum):
             # print("q_np = {0}".format(q_np))
             # q_np = np.random.uniform(-1.5, 1.5, size=7)
@@ -644,7 +699,15 @@ class Estimator(Node):
             fri_ = cs.diag(cs.sign(qd))
             fri_ = cs.horzcat(fri_,  cs.diag(qd))
             # fri_ = [[np.sign(v), v] for v in qd_np]
-            
+            pfun_list.append(pfun(q))
+            pfun_list.append(pfun1(q))
+            pfun_list.append(pfun2(q))
+            pfun_list.append(pfun3(q))
+            pfun_list.append(pfun4(q))
+            pfun_list.append(pfun5(q))
+            pfun_list.append(pfun6(q))
+            pfun_list.append(pfun7(q))
+
             Y_.append(Y_temp)
             # q_nps.append(q_np)
             # qd_nps.append(qd_np)
@@ -685,13 +748,13 @@ class Estimator(Node):
                 print("iter {0}, {1}".format(i, l))
                 a_eq1[i] = a_eq1[i] + a[l,i]/(l+1)
                 b_eq1[i] = b_eq1[i] + b[l,i]
-                a_eq2[i] = a_eq1[i] + a[l,i]*(l+1)
+                a_eq2[i] = a_eq2[i] + a[l,i]*(l+1)
 
                 wl = ((l+1) * Ff* math.pi* 2.0) 
                 ab_sq_ineq1[i] = (ab_sq_ineq1[i]+ 
                 1.0/(wl)* cs.sqrt(a[l,i]*a[l,i] + b[l,i]*b[l,i]))
 
-                ab_sq_ineq2[i] = (ab_sq_ineq1[i]+ 
+                ab_sq_ineq2[i] = (ab_sq_ineq2[i]+ 
                 cs.sqrt(a[l,i]*a[l,i] + b[l,i]*b[l,i]))
 
                 ab_sq_ineq3.append(a[l,i])
@@ -723,11 +786,14 @@ class Estimator(Node):
             # lbg.append(0.0)
             # lbg.append(0.0)
 
+        
+        # g = cs.vertcat(*(a_eq1+  a_eq2+  b_eq1+  ab_sq_ineq1+ ab_sq_ineq2 + ab_sq_ineq3))
+        # lbg = cs.vertcat(*(lbg1,lbg2,lbg3,lbg4,lbg5,lbg6))
+        # ubg = cs.vertcat(*(ubg1,ubg2,ubg3,ubg4,ubg5,ubg6))
 
-
-        g = cs.vertcat(*(a_eq1+  a_eq2+  b_eq1+  ab_sq_ineq1+ ab_sq_ineq2 + ab_sq_ineq3))
-        lbg = cs.vertcat(*(lbg1,lbg2,lbg3,lbg4,lbg5,lbg6))
-        ubg = cs.vertcat(*(ubg1,ubg2,ubg3,ubg4,ubg5,ubg6))
+        g = cs.vertcat(*(a_eq1+  a_eq2+  b_eq1+  ab_sq_ineq1+ ab_sq_ineq2 + ab_sq_ineq3 +pfun_list))
+        lbg = cs.vertcat(*(lbg1,lbg2,lbg3,lbg4,lbg5,lbg6, [0.5]*len(pfun_list)))
+        ubg = cs.vertcat(*(ubg1,ubg2,ubg3,ubg4,ubg5,ubg6, [optas.inf]*len(pfun_list)))
 
         # print("sol['x'] = {0}".format(sol['x']),flush= True)
         A = Y.T @ Y
@@ -777,7 +843,7 @@ class Estimator(Node):
 
         # print("Run to here22")
         
-        S = cs.nlpsol('S', 'ipopt', problem,{'ipopt':{'max_iter':1500 }, 'verbose':True})
+        S = cs.nlpsol('S', 'ipopt', problem,{'ipopt':{'max_iter':1000 }, 'verbose':True})
         # random.random (size= (3,4))
         sol = S(x0 = 0.5* np.random.random (size= (1,70)),lbg = lbg, ubg = ubg)
         # sol = S(x0 = 0.1*np.ones([1,70]),lbg = lbg, ubg = ubg)
@@ -821,8 +887,8 @@ class Estimator(Node):
         pointsNum = int(sampling_rate/Ff)
         Ts = 1.0/Ff
 
-        keys = ["lbr_joint_0", "lbr_joint_1", "lbr_joint_2", "lbr_joint_3", "lbr_joint_4", "lbr_joint_5", "lbr_joint_6",
-                "lbr_joint_0v", "lbr_joint_1v", "lbr_joint_2v", "lbr_joint_3v", "lbr_joint_4v", "lbr_joint_5v", "lbr_joint_6v"]
+        keys = ["lbr_A0", "lbr_A1", "lbr_A2", "lbr_A3", "lbr_A4", "lbr_A5", "lbr_A6",
+                "lbr_A0v", "lbr_A1v", "lbr_A2v", "lbr_A3v", "lbr_A4v", "lbr_A5v", "lbr_A6v"]
         keys = ["time_stamps"] + keys
         values_list = []
         for k in range(pointsNum):
@@ -1027,43 +1093,6 @@ class Estimator(Node):
         keys = ["para_{0}".format(idx) for idx in range(len(para))]
         with open(path1,"w") as csv_file:
             self.save_(csv_file,keys,[para])
-        
-
-        # for k in range(1,len(positions),1):
-        #     # q_np = positions[k][4,1,2,3,5,6,7]
-        #     # qd_np = velocities[k][4,1,2,3,5,6,7]
-        #     # tau_ext = efforts[k][4,1,2,3,5,6,7]
-        #     # qdd_np = (np.array(velocities[k][4,1,2,3,5,6,7])-np.array(velocities[k-1][4,1,2,3,5,6,7]))/(velocities[k][0]-velocities[k-1][0])
-        #     # qdd_np = qdd_np.tolist()
-
-        #     q_np = [positions[k][i] for i in Order]
-        #     qd_np = [velocities[k][i] for i in Order]
-        #     tau_ext = [efforts[k][i] for i in Order]
-
-        #     qdlast_np = [velocities[k-1][i] for i in Order]
-        #     # qdd_np = (np.array(qd_np)-np.array(qdlast_np))/0.01#(velocities[k][0]-velocities[k-1][0])
-        #     # qdd_np = qdd_np.tolist()
-        #     filter_list = [TD_2order(T=0.01) for i in range(len(qd_np))]
-        #     qdd_np = (np.array(qd_np)-np.array(qdlast_np))/0.01
-        #     qdd_np = qdd_np.tolist()
-        #     # qdd_np = [f(qd_np[id])[1] for id,f in enumerate(filter_list)]
-
-        #     # tau_ext = self.robot.rnea(q_np,qd_np,qdd_np)
-        #     # e=self.Ymat(q_np,qd_np,qdd_np)@Pb @ (solution[f"{self.pam_name}/y"] -  K @real_pam)
-        #     # print("error = {0}".format(e))
-
-        #     # e=self.Ymat(q_np,qd_np,qdd_np)@Pb @  para - tau_ext 
-            # e=(self.Ymat(q_np,qd_np,qdd_np)@Pb @  para[:50] + 
-            #     np.diag(np.sign(qd_np)) @ para[50:57]+ 
-            #     np.diag(qd_np) @ para[57:]) - tau_ext 
-            # print("error1 = {0}".format(e))
-            # print("tau_ext = {0}".format(tau_ext))
-
-        # print("taus1 size = {0}".format(taus1.shape))
-        # print("q_nps1 size = {0}".format(q_nps1.shape))
-        # print("qd_nps1 size = {0}".format(qd_nps1.shape))
-
-        # real_pam=self.PIvector(self.masses_np,self.massesCenter_np,self.Inertia_np)
 
 
 
@@ -1083,7 +1112,7 @@ def main(args=None):
 
     ret = paraEstimator.generateToCsv(a,b,Ff = Ff,sampling_rate=sampling_rate*100.0)
     if ret:
-        print("Done! Congratulations! ")
+        print("Done! Congratulations! self-collision avoidance")
 
 
 
