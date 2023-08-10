@@ -447,7 +447,7 @@ def main():
     # find minimal set of ID
     Pb, Pd, Kd =find_dyn_parm_deps(7,80,Ymat)
     K = Pb.T +Kd @Pd.T
-    pa_size = K.shape[1]
+    pa_size = Pb.shape[1]
 
 
     # Assuming the pos, vel and acc
@@ -483,20 +483,20 @@ def main():
     #             np.diag(np.sign(qd)) @ params[pa_size:pa_size+7]+ 
     #             np.diag(qdd) @ params[pa_size+7:])
     
-    # tau_est = (Ymat(q.tolist(), 
-    #                 filter(qd.tolist())[0], 
-    #                 filter(qd.tolist())[1]  # directly compute qdd here.
-    #                 ) @ Pb @K @  params[:pa_size] + 
-    #             np.diag(np.sign(qd)) @ params[pa_size:pa_size+7]+ 
-    #             np.diag(qdd) @ params[pa_size+7:])
-
-    
-    tau_est = Ymat(q.tolist(), 
+    tau_est = (Ymat(q.tolist(), 
                     filter(qd.tolist())[0], 
                     filter(qd.tolist())[1]  # directly compute qdd here.
-                    ) @ Pb @K @  real_pam[:pa_size]
-                # np.diag(np.sign(qd)) @ real_pam[pa_size:pa_size+7]+ 
-                # np.diag(qdd) @ real_pam[pa_size+7:])
+                    ) @ Pb  @  params[:pa_size] + 
+                np.diag(np.sign(qd)) @ params[pa_size:pa_size+7]+ 
+                np.diag(qdd) @ params[pa_size+7:])
+
+    
+    # tau_est = Ymat(q.tolist(), 
+    #                 filter(qd.tolist())[0], 
+    #                 filter(qd.tolist())[1]  # directly compute qdd here.
+    #                 ) @ Pb @  real_pam[:pa_size]
+    #             # np.diag(np.sign(qd)) @ real_pam[pa_size:pa_size+7]+ 
+    #             # np.diag(qdd) @ real_pam[pa_size+7:])
     
     print(" The estimated torque  tau_est = {0}".format(tau_est))
 
