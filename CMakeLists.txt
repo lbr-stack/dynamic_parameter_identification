@@ -17,6 +17,7 @@ install(
     src/ParamsEstimation.py
     src/regression.py
     src/IDmodel.py
+    src/CollisionCheck.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
