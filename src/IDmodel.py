@@ -6,6 +6,8 @@ from optas.spatialmath import *
 from ament_index_python import get_package_share_directory
 import os
 import math
+import xacro
+import urdf_parser_py.urdf as urdf
 
 def sign(x):
     if x > 0:
@@ -400,6 +402,21 @@ def find_dyn_parm_deps(dof, parm_num, regressor_func):
 
     return Pb, Pd, Kd
 
+def InertialParaFromURDF(path):
+    urdf_string_ = xacro.process(path)
+    robot = urdf.URDF.from_xml_string(urdf_string_)
+    masses = [link.inertial.mass for link in robot.links if link.inertial is not None]#+[1.0]
+    masses_np = np.array(masses[1:])
+    # print("masses = {0}".format(masses_np))
+
+    massesCenter = [link.inertial.origin.xyz for link in robot.links if link.inertial is not None]#+[[0.0,0.0,0.0]]
+    massesCenter_np = np.array(massesCenter[1:]).T
+    # Inertia = [np.mat(link.inertial.inertia.to_matrix()) for link in robot.links if link.inertial is not None]
+    Inertia = [link.inertial.inertia.to_matrix() for link in robot.links if link.inertial is not None]
+
+    Inertia_np = np.hstack(tuple(Inertia[1:]))
+    return masses_np, massesCenter_np, Inertia_np
+
 
 
 def main():
@@ -409,6 +426,8 @@ def main():
             "urdf",
             "med7dock.urdf.xacro",
         )
+    
+    masses_np, massesCenter_np, Inertia_np = InertialParaFromURDF(path)
 
     # load the robot kinematic model
     robot = optas.RobotModel(
@@ -428,7 +447,7 @@ def main():
     # find minimal set of ID
     Pb, Pd, Kd =find_dyn_parm_deps(7,80,Ymat)
     K = Pb.T +Kd @Pd.T
-    pa_size = Pb.shape[1]
+    pa_size = K.shape[1]
 
 
     # Assuming the pos, vel and acc
@@ -446,15 +465,38 @@ def main():
             "DynamicParameters.csv",
         )
     params = ExtractFromParamsCsv(path_pos)
+    # print("Y",Ymat(q.tolist(), 
+    #                 filter(qd.tolist())[0], 
+    #                 filter(qd.tolist())[1]  # directly compute qdd here.
+    #                 ).shape)
+    # print("K ",K.shape)
+    # print("Pb ",Pb.shape)
+    # print("masses_np",masses_np.shape)
+    real_pam=PIvector(masses_np, massesCenter_np, Inertia_np)
 
-
+    # print("real_pam ",real_pam)
     # calculate the tau_estimation
-    tau_est = (Ymat(q.tolist(), 
+    # tau_est = (Ymat(q.tolist(), 
+    #                 filter(qd.tolist())[0], 
+    #                 filter(qd.tolist())[1]  # directly compute qdd here.
+    #                 ) @ Pb @K @  params[:pa_size] + 
+    #             np.diag(np.sign(qd)) @ params[pa_size:pa_size+7]+ 
+    #             np.diag(qdd) @ params[pa_size+7:])
+    
+    # tau_est = (Ymat(q.tolist(), 
+    #                 filter(qd.tolist())[0], 
+    #                 filter(qd.tolist())[1]  # directly compute qdd here.
+    #                 ) @ Pb @K @  params[:pa_size] + 
+    #             np.diag(np.sign(qd)) @ params[pa_size:pa_size+7]+ 
+    #             np.diag(qdd) @ params[pa_size+7:])
+
+    
+    tau_est = Ymat(q.tolist(), 
                     filter(qd.tolist())[0], 
                     filter(qd.tolist())[1]  # directly compute qdd here.
-                    ) @ Pb @  params[:pa_size] + 
-                np.diag(np.sign(qd)) @ params[pa_size:pa_size+7]+ 
-                np.diag(qdd) @ params[pa_size+7:])
+                    ) @ Pb @K @  real_pam[:pa_size]
+                # np.diag(np.sign(qd)) @ real_pam[pa_size:pa_size+7]+ 
+                # np.diag(qdd) @ real_pam[pa_size+7:])
     
     print(" The estimated torque  tau_est = {0}".format(tau_est))
 

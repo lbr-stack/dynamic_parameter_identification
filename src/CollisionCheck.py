@@ -11,7 +11,7 @@ import math
 from ParamsEstimation import getJointParametersfromURDF
 
 
-def getConstraintsinJointSpace(robot,point_coord = [0.]*3,Nb=7, base_link="lbr_link_3", base_joint_name="lbr_joint_3", ee_link="lbr_link_ee"):
+def getConstraintsinJointSpace(robot,point_coord = [0.]*3,Nb=7, base_link="lbr_link_3", base_joint_name="lbr_A3", ee_link="lbr_link_ee"):
     q = cs.SX.sym('q', Nb, 1)
 
     pe = robot.get_global_link_position(ee_link, q)

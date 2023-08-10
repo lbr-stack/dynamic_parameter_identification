@@ -638,7 +638,7 @@ class Estimator(Node):
     
     def generate_opt_traj(self,Ff, sampling_rate, Rank=5, 
                           q_min=-2.0*np.ones(7), q_max =2.0*np.ones(7),
-                          q_vmin=-10.0*np.ones(7),q_vmax=10.0*np.ones(7)):
+                          q_vmin=-2.0*np.ones(7),q_vmax=2.0*np.ones(7)):
 
         Pb, Pd, Kd =find_dyn_parm_deps(7,80,self.Ymat)
 
@@ -760,8 +760,10 @@ class Estimator(Node):
                 ab_sq_ineq3.append(a[l,i])
                 ab_sq_ineq3.append(b[l,i])
 
-                cpr = max((l+1)*Ff/5.0*q_min[i],q_vmin[i])
-                cpr2 = min((l+1)*Ff/5.0*q_max[i],q_vmax[i])
+
+                cpr2 = min((l+1)*Ff/5.0*2.0*math.pi*q_max[i],q_vmax[i])
+
+                cpr = max((l+1)*Ff/5.0*2.0*math.pi*q_min[i],q_vmin[i])
                 lbg6.append(cpr)
                 lbg6.append(cpr)
 
@@ -793,11 +795,14 @@ class Estimator(Node):
 
         g = cs.vertcat(*(a_eq1+  a_eq2+  b_eq1+  ab_sq_ineq1+ ab_sq_ineq2 + ab_sq_ineq3 +pfun_list))
         lbg = cs.vertcat(*(lbg1,lbg2,lbg3,lbg4,lbg5,lbg6, [0.5]*len(pfun_list)))
-        ubg = cs.vertcat(*(ubg1,ubg2,ubg3,ubg4,ubg5,ubg6, [optas.inf]*len(pfun_list)))
+        ubg = cs.vertcat(*(ubg1,ubg2,ubg3,ubg4,ubg5,ubg6, [100.0]*len(pfun_list)))
 
         # print("sol['x'] = {0}".format(sol['x']),flush= True)
+        # print("ubg = ", ubg.shape)
+        # print("lbg = ", lbg.shape)
+        # print("g = ", g.shape)
         A = Y.T @ Y
-
+        # raise ValueError("run to here")
         print("A = {0}".format(A.shape))
         print("Y = {0}".format(Y.shape))
         # raise ValueError("Run to here")
@@ -839,11 +844,11 @@ class Estimator(Node):
         # print("a = {0}, b ={1}".format(a,b))
         # print(" xx= {0},  {1}".format(x_split1,x_split2))
         problem = {'x': x,'f':f, 'g': g}
-        # S = cs.qpsol('solver', 'qpoases', problem)
 
         # print("Run to here22")
         
-        S = cs.nlpsol('S', 'ipopt', problem,{'ipopt':{'max_iter':1000 }, 'verbose':True})
+        # S = cs.qpsol('solver', 'qpoases', problem)
+        S = cs.nlpsol('S', 'ipopt', problem,{'ipopt':{'max_iter':40000 }, 'verbose':True})
         # random.random (size= (3,4))
         sol = S(x0 = 0.5* np.random.random (size= (1,70)),lbg = lbg, ubg = ubg)
         # sol = S(x0 = 0.1*np.ones([1,70]),lbg = lbg, ubg = ubg)

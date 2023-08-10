@@ -1036,7 +1036,7 @@ class Estimator(Node):
 
             # e=self.Ymat(q_np,qd_np,qdd_np)@Pb @  para - tau_ext 
             pa_size = Pb.shape[1]
-            tau_est_model = (self.Ymat(q_np,qd_np,qdd_np)@Pb @  para[:pa_size] + 
+            tau_est_model = (self.Ymat(q_np,qd_np,qdd_np)@K @  para[:pa_size] + 
                 np.diag(np.sign(qd_np)) @ para[pa_size:pa_size+7]+ 
                 np.diag(qd_np) @ para[pa_size+7:])
             e= tau_est_model - tau_ext 
