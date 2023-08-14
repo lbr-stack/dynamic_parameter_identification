@@ -638,7 +638,7 @@ class Estimator(Node):
     
     def generate_opt_traj(self,Ff, sampling_rate, Rank=5, 
                           q_min=-2.0*np.ones(7), q_max =2.0*np.ones(7),
-                          q_vmin=-2.0*np.ones(7),q_vmax=2.0*np.ones(7)):
+                          q_vmin=-5.0*np.ones(7),q_vmax=5.0*np.ones(7)):
 
         Pb, Pd, Kd =find_dyn_parm_deps(7,80,self.Ymat)
 
@@ -794,7 +794,7 @@ class Estimator(Node):
         # ubg = cs.vertcat(*(ubg1,ubg2,ubg3,ubg4,ubg5,ubg6))
 
         g = cs.vertcat(*(a_eq1+  a_eq2+  b_eq1+  ab_sq_ineq1+ ab_sq_ineq2 + ab_sq_ineq3 +pfun_list))
-        lbg = cs.vertcat(*(lbg1,lbg2,lbg3,lbg4,lbg5,lbg6, [0.5]*len(pfun_list)))
+        lbg = cs.vertcat(*(lbg1,lbg2,lbg3,lbg4,lbg5,lbg6, [0.0]*len(pfun_list)))
         ubg = cs.vertcat(*(ubg1,ubg2,ubg3,ubg4,ubg5,ubg6, [100.0]*len(pfun_list)))
 
         # print("sol['x'] = {0}".format(sol['x']),flush= True)
@@ -802,6 +802,7 @@ class Estimator(Node):
         # print("lbg = ", lbg.shape)
         # print("g = ", g.shape)
         A = Y.T @ Y
+        # A = Y
         # raise ValueError("run to here")
         print("A = {0}".format(A.shape))
         print("Y = {0}".format(Y.shape))
@@ -811,9 +812,9 @@ class Estimator(Node):
 
         shape = A.shape[0]
         # f = cs.fmax(*A)
-        U, V = find_eigen_value(7,5,A_fun,shape)
+        # U, V = find_eigen_value(7,5,A_fun,shape)
 
-        print("U = {0}\n V = {1}".format(U,V))
+        # print("U = {0}\n V = {1}".format(U,V))
 
         # def objective(a,b):
         #     # a,b = cs.vertsplit(cs.reshape(x,(10,7)),5)
@@ -835,7 +836,8 @@ class Estimator(Node):
         # f = -1.0*cs.norm_1(A_reform[0,0])
         # f = -1.0*cs.trace(A)/(A_reform[-1,-1]+0.1)
         A_inv = cs.inv(A)
-        f = -1.0*cs.trace(A)*cs.trace(A_inv)
+        # f = -1.0*cs.trace(A)*cs.trace(A_inv)
+        f = 1.0*cs.trace(A)#*cs.trace(A)
         x = cs.reshape(cs.vertcat(a,b),(1, 70))
         # fout = objective(a,b)
         # print("Run to here11")
@@ -848,7 +850,7 @@ class Estimator(Node):
         # print("Run to here22")
         
         # S = cs.qpsol('solver', 'qpoases', problem)
-        S = cs.nlpsol('S', 'ipopt', problem,{'ipopt':{'max_iter':40000 }, 'verbose':True})
+        S = cs.nlpsol('S', 'ipopt', problem,{'ipopt':{'max_iter':30000 }, 'verbose':True})
         # random.random (size= (3,4))
         sol = S(x0 = 0.5* np.random.random (size= (1,70)),lbg = lbg, ubg = ubg)
         # sol = S(x0 = 0.1*np.ones([1,70]),lbg = lbg, ubg = ubg)
@@ -1109,13 +1111,13 @@ def main(args=None):
     rclpy.init(args=args)
     paraEstimator = Estimator()
     Ff = 0.01
-    sampling_rate = 1.0
+    sampling_rate = 0.1
     a,b = paraEstimator.generate_opt_traj(Ff = Ff,sampling_rate = sampling_rate)
     print("a = {0} \n b = {1}".format(a,b))
     # a, b = np.ones([5,7]),np.ones([5,7])
     # print("a = {0} \n b = {1}".format(type(a),type(b)))
 
-    ret = paraEstimator.generateToCsv(a,b,Ff = Ff,sampling_rate=sampling_rate*100.0)
+    ret = paraEstimator.generateToCsv(a,b,Ff = Ff,sampling_rate=sampling_rate*1000.0)
     if ret:
         print("Done! Congratulations! self-collision avoidance")
 
