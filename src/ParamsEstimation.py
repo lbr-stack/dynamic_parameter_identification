@@ -21,6 +21,7 @@ import pathlib
 import urdf_parser_py.urdf as urdf
 import math
 import copy
+from convexhallExtraction import get_convex_hull
 
 # from CollisionCheck import getConstraintsinJointSpace
 
@@ -498,35 +499,7 @@ class Estimator(Node):
             xacro_filename=path,
             time_derivs=[1],  # i.e. joint velocity
         )
-        # root = self.robot.urdf.get_root()
-        # ee_link = "lbr_link_ee"
-        # xyzs, rpys, axes = [], [], []
 
-
-        # joints_list = self.robot.urdf.get_chain(root, ee_link, links=False)
-        # print("joints_list = {0}"
-        #       .format(joints_list)
-        #       )
-        # # assumption: The first joint is fixed. The information in this joint is not recorded
-        # """
-        # xyzs starts from joint 0 to joint ee
-        # rpys starts from joint 0 to joint ee
-        # axes starts from joint 0 to joint ee
-        # """
-        # joints_list_r = joints_list[1:]
-        # for joint_name in joints_list_r:
-        #     print(joint_name)
-        #     joint = self.robot.urdf.joint_map[joint_name]
-        #     xyz, rpy = self.robot.get_joint_origin(joint)
-        #     axis = self.robot.get_joint_axis(joint)
-
-        #     # record the kinematic parameters
-        #     xyzs.append(xyz)
-        #     rpys.append(rpy)
-        #     axes.append(axis)
-        # print("xyz, rpy, axis = {0}, {1} ,{2}".format(xyzs, rpys, axes))
-        
-        # Nb = len(joints_list_r)-1
 
         Nb, xyzs, rpys, axes = getJointParametersfromURDF(self.robot)
         self.dynamics_ = RNEA_function(Nb,1,rpys,xyzs,axes)
@@ -536,12 +509,6 @@ class Estimator(Node):
         urdf_string_ = xacro.process(path)
         robot = urdf.URDF.from_xml_string(urdf_string_)
 
-        # print([joint.name for joint in robot.joints if joint.origin is not None])
-        # print([joint.origin.xyz for joint in robot.joints if joint.origin is not None])
-
-        # print([link.name for link in robot.links if link.inertial is not None])
-        # print([link.inertial.origin.xyz for link in robot.links if link.inertial is not None])
-        # print([link.inertial.mass for link in robot.links if link.inertial is not None])
 
         masses = [link.inertial.mass for link in robot.links if link.inertial is not None]#+[1.0]
         self.masses_np = np.array(masses[1:])
@@ -659,23 +626,45 @@ class Estimator(Node):
         fourierDDot = [optas.jacobian(fourierDot[i],t) for i in range(len(fourierDot))]
 
         print(fourierDot)
-        pfun =getConstraintsinJointSpace(self.robot,point_coord=[-0.25, 0.0, 0.1])
-        pfun1 =getConstraintsinJointSpace(self.robot,point_coord=[-0.07, 0.0, 0.1])
 
-        pfun2 =getConstraintsinJointSpace(self.robot,point_coord=[-0.25, 0.0, 0.1], 
-                                          base_link="lbr_link_4", base_joint_name="lbr_A4")
-        pfun3 =getConstraintsinJointSpace(self.robot,point_coord=[-0.07, 0.0, 0.1],
-                                          base_link="lbr_link_4", base_joint_name="lbr_A4")
+        path_pos = os.path.join(
+                get_package_share_directory("med7_dock_description"),
+                "meshes",
+                "EndEffector.STL",
+            )
 
-        pfun4 =getConstraintsinJointSpace(self.robot,point_coord=[-0.25, 0.0, 0.1], 
-                                          base_link="lbr_link_5", base_joint_name="lbr_A5")
-        pfun5 =getConstraintsinJointSpace(self.robot,point_coord=[-0.07, 0.0, 0.1],
-                                          base_link="lbr_link_5", base_joint_name="lbr_A5")
+        points = get_convex_hull(path_pos)
+        # print("points", points)
+        # raise Exception("Run to here")
+        str_prefix = "lbr_"
+        vfs_fun = []
+        for point in points:
+            for i in range(2,6):
+                vfs_fun.append(getConstraintsinJointSpace(self.robot, point_coord=point, 
+                                           base_link=str_prefix+"link_"+str(i),
+                                           base_joint_name=str_prefix+"A"+str(i)
+                                           ))
+
+
+        # pfun =getConstraintsinJointSpace(self.robot,point_coord=[-0.25, 0.0, 0.1])
+        # pfun1 =getConstraintsinJointSpace(self.robot,point_coord=[-0.07, 0.0, 0.1])
+
+        # pfun2 =getConstraintsinJointSpace(self.robot,point_coord=[-0.25, 0.0, 0.1], 
+        #                                   base_link="lbr_link_4", base_joint_name="lbr_A4")
+        # pfun3 =getConstraintsinJointSpace(self.robot,point_coord=[-0.07, 0.0, 0.1],
+        #                                   base_link="lbr_link_4", base_joint_name="lbr_A4")
+
+        # pfun4 =getConstraintsinJointSpace(self.robot,point_coord=[-0.25, 0.0, 0.1], 
+        #                                   base_link="lbr_link_5", base_joint_name="lbr_A5")
+        # pfun5 =getConstraintsinJointSpace(self.robot,point_coord=[-0.07, 0.0, 0.1],
+        #                                   base_link="lbr_link_5", base_joint_name="lbr_A5")
         
-        pfun6 =getConstraintsinJointSpace(self.robot,point_coord=[-0.25, 0.0, 0.1], 
-                                          base_link="lbr_link_2", base_joint_name="lbr_A2")
-        pfun7 =getConstraintsinJointSpace(self.robot,point_coord=[-0.07, 0.0, 0.1],
-                                          base_link="lbr_link_2", base_joint_name="lbr_A2")
+        # pfun6 =getConstraintsinJointSpace(self.robot,point_coord=[-0.25, 0.0, 0.1], 
+        #                                   base_link="lbr_link_2", base_joint_name="lbr_A2")
+        # pfun7 =getConstraintsinJointSpace(self.robot,point_coord=[-0.07, 0.0, 0.1],
+        #                                   base_link="lbr_link_2", base_joint_name="lbr_A2")
+        
+
 
         Y_ = []
         Y_fri = []
@@ -698,21 +687,13 @@ class Estimator(Node):
             #[cs.sign(item) for item in qd_list])
             fri_ = cs.diag(cs.sign(qd))
             fri_ = cs.horzcat(fri_,  cs.diag(qd))
-            # fri_ = [[np.sign(v), v] for v in qd_np]
-            pfun_list.append(pfun(q))
-            pfun_list.append(pfun1(q))
-            pfun_list.append(pfun2(q))
-            pfun_list.append(pfun3(q))
-            pfun_list.append(pfun4(q))
-            pfun_list.append(pfun5(q))
-            pfun_list.append(pfun6(q))
-            pfun_list.append(pfun7(q))
+            
+
+            for j in range(len(vfs_fun)):
+                pfun_list.append(vfs_fun[j](q))
+
 
             Y_.append(Y_temp)
-            # q_nps.append(q_np)
-            # qd_nps.append(qd_np)
-            # qdd_nps.append(qdd_np)
-            # taus.append(tau_ext)
             Y_fri.append(fri_)
 
         Y_r = optas.vertcat(*Y_)
@@ -795,7 +776,7 @@ class Estimator(Node):
 
         g = cs.vertcat(*(a_eq1+  a_eq2+  b_eq1+  ab_sq_ineq1+ ab_sq_ineq2 + ab_sq_ineq3 +pfun_list))
         lbg = cs.vertcat(*(lbg1,lbg2,lbg3,lbg4,lbg5,lbg6, [0.0]*len(pfun_list)))
-        ubg = cs.vertcat(*(ubg1,ubg2,ubg3,ubg4,ubg5,ubg6, [100.0]*len(pfun_list)))
+        ubg = cs.vertcat(*(ubg1,ubg2,ubg3,ubg4,ubg5,ubg6, [100000.0]*len(pfun_list)))
 
         # print("sol['x'] = {0}".format(sol['x']),flush= True)
         # print("ubg = ", ubg.shape)
@@ -829,6 +810,14 @@ class Estimator(Node):
         # raise ValueError("Run to here")
 
         # A_reform = U.T @ A @ V.T
+        q_np = np.array([0.0]*7)
+        values=[]
+        for j in range(len(vfs_fun)):
+            values.append(vfs_fun[j](q_np))
+
+        print("values", values)
+
+        # raise ValueError("run to here")
 
 
 
@@ -845,14 +834,19 @@ class Estimator(Node):
         # print("x = {0}".format(x))
         # print("a = {0}, b ={1}".format(a,b))
         # print(" xx= {0},  {1}".format(x_split1,x_split2))
+
+        problem_init = {'x': x,'f':f, 'g':g[:-len(pfun_list)]}
+        S_init = cs.nlpsol('S', 'ipopt', problem_init,{'ipopt':{'max_iter':50000 }, 'verbose':False, 'bound_consistency':True})
+        sol_init = S_init(x0 = 0.5* np.random.random (size= (1,70)),lbg = lbg[:-len(pfun_list)], ubg = ubg[:-len(pfun_list)])
+
         problem = {'x': x,'f':f, 'g': g}
 
         # print("Run to here22")
         
         # S = cs.qpsol('solver', 'qpoases', problem)
-        S = cs.nlpsol('S', 'ipopt', problem,{'ipopt':{'max_iter':30000 }, 'verbose':True})
+        S = cs.nlpsol('S', 'ipopt', problem,{'ipopt':{'max_iter':20000 }, 'verbose':False, 'bound_consistency':True})
         # random.random (size= (3,4))
-        sol = S(x0 = 0.5* np.random.random (size= (1,70)),lbg = lbg, ubg = ubg)
+        sol = S(x0 = sol_init['x'],lbg = lbg, ubg = ubg)
         # sol = S(x0 = 0.1*np.ones([1,70]),lbg = lbg, ubg = ubg)
 
         print("Run to here 33")

@@ -579,12 +579,8 @@ class Estimator(Node):
         
         return pos, vel, eff
     
-    def ExtractFromMeasurmentCsv(self):
-        path_pos = os.path.join(
-            get_package_share_directory("gravity_compensation"),
-            "test",
-            "measurements_with_ext_tau_1_dgr.csv",
-        )
+    def ExtractFromMeasurmentCsv(self,path_pos):
+        
 
         # path_vel = os.path.join(
         #     get_package_share_directory("gravity_compensation"),
@@ -980,7 +976,7 @@ class Estimator(Node):
         obj = cs.sumsqr(taus1 - Y @ estimate_cs)
         # obj = cs.sumsqr(taus1 )
 
-        ref_pam = K @ self.PIvector(self.masses_np,self.massesCenter_np,self.Inertia_np)
+        # ref_pam = K @ self.PIvector(self.masses_np,self.massesCenter_np,self.Inertia_np)
         
         # lb = -2.5*ref_pam
         # ub = 2.5*ref_pam
@@ -1036,7 +1032,7 @@ class Estimator(Node):
 
             # e=self.Ymat(q_np,qd_np,qdd_np)@Pb @  para - tau_ext 
             pa_size = Pb.shape[1]
-            tau_est_model = (self.Ymat(q_np,qd_np,qdd_np)@K @  para[:pa_size] + 
+            tau_est_model = (self.Ymat(q_np,qd_np,qdd_np) @Pb@  para[:pa_size] + 
                 np.diag(np.sign(qd_np)) @ para[pa_size:pa_size+7]+ 
                 np.diag(qd_np) @ para[pa_size+7:])
             e= tau_est_model - tau_ext 
@@ -1230,27 +1226,18 @@ def compare_traj(states1, states2):
 def main(args=None):
     rclpy.init(args=args)
     paraEstimator = Estimator()
-    positions, velocities, efforts = paraEstimator.ExtractFromMeasurmentCsv()
+
+    path_pos = os.path.join(
+            get_package_share_directory("gravity_compensation"),
+            "test",
+            "measurements_0dgr.csv",
+        )
+
+    positions, velocities, efforts = paraEstimator.ExtractFromMeasurmentCsv(path_pos)
     velocities=traj_filter(velocities)
     efforts_f=traj_filter(efforts)
 
 
-    # accs=acc_calculation_mode(velocities)
-    # accs2=acc_calculation_mode_withTD(velocities)
-    # compare_traj(accs,accs2)
-
-
-    # filter = TD_list_filter(T = 0.01)
-    # velocities_f = []
-    # for vel in efforts:
-    #     velocities_f.append(filter(vel)[0].tolist())
-
-    # compare_traj(velocities_f,efforts_f)
-
-
-    # view_variables_in_joint_space(positions)
-    # view_variables_in_joint_space(velocities)
-    # view_variables_in_joint_space(efforts_f)
 
     estimate_pam,ref_pam = paraEstimator.timer_cb_regressor(positions, velocities, efforts_f)
     print("estimate_pam = {0}".format(estimate_pam))
