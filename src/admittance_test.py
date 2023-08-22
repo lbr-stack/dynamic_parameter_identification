@@ -270,9 +270,14 @@ class AdmittanceControlNode(Node):
             + alpha * np.array(lbr_state.measured_joint_position.tolist())
         ).data
 
-        self.lbr_state_.measured_torque = (
+        self.lbr_state_.external_torque = (
             (1 - alpha) * np.array(self.lbr_state_.external_torque.tolist())
             + alpha * np.array(lbr_state.external_torque.tolist())
+        ).data
+
+        self.lbr_state_.measured_torque = (
+            (1 - alpha) * np.array(self.lbr_state_.measured_torque.tolist())
+            + alpha * np.array(lbr_state.measured_torque.tolist())
         ).data
 
 
