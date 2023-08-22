@@ -976,13 +976,13 @@ class Estimator(Node):
         obj = cs.sumsqr(taus1 - Y @ estimate_cs)
         # obj = cs.sumsqr(taus1 )
 
-        # ref_pam = K @ self.PIvector(self.masses_np,self.massesCenter_np,self.Inertia_np)
-        
-        # lb = -2.5*ref_pam
-        # ub = 2.5*ref_pam
-
         lb = -10000000.0*np.array([1.0]*(pa_size+14))
         ub = 10000000.0*np.array([1.0]*(pa_size+14))
+        ref_pam = K @ self.PIvector(self.masses_np,self.massesCenter_np,self.Inertia_np)
+        
+        lb[:pa_size] = -2.5*ref_pam
+        ub[:pa_size] = 2.5*ref_pam
+
 
         # lb = 0.3*ref_pam
         # ub = -0.3*ref_pam
@@ -1209,14 +1209,6 @@ def compare_traj(states1, states2):
 
     plt.subplots_adjust(hspace=0.5)
     plt.show()
-
-
-
-
-    
-
-
-        
 
 
 
