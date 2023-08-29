@@ -22,6 +22,7 @@ import urdf_parser_py.urdf as urdf
 import math
 import copy
 from convexhallExtraction import get_convex_hull
+import random
 
 # from CollisionCheck import getConstraintsinJointSpace
 
@@ -457,7 +458,7 @@ class FourierSeries():
             for l in range(self.Rank):
                 wl = ((l+1) * self.ff* math.pi* 2.0) 
                 q[i] = q[i] + a[l,i]/wl * cs.sin(wl * t) 
-                - b[l,i] * cs.cos(wl * t)
+                - b[l,i]/wl * cs.cos(wl * t)
 
         return cs.Function(name, [a, b, t], q)
     
@@ -467,7 +468,7 @@ class FourierSeries():
             for l in range(self.Rank):
                 wl = ((l+1) * self.ff* math.pi* 2.0) 
                 q[i] = q[i] + a[l,i]/wl * np.sin(wl * t) 
-                - b[l,i] * np.cos(wl * t)
+                - b[l,i]/wl * np.cos(wl * t)
 
         return q
 
@@ -605,13 +606,17 @@ class Estimator(Node):
     
     def generate_opt_traj(self,Ff, sampling_rate, Rank=5, 
                           q_min=-2.0*np.ones(7), q_max =2.0*np.ones(7),
-                          q_vmin=-5.0*np.ones(7),q_vmax=5.0*np.ones(7)):
+                          q_vmin=-1.0*np.ones(7),q_vmax=1.0*np.ones(7),
+                          f_path = None, g_path=None):
 
         Pb, Pd, Kd =find_dyn_parm_deps(7,80,self.Ymat)
+        K = Pb.T +Kd @Pd.T
 
         
         # sampling_rate = 0.1
-        pointsNum = int(sampling_rate/(Ff*4))
+        pointsNum = int(sampling_rate/(Ff))
+        print("pointsNum",pointsNum)
+        # raise ValueError("run to here")
 
         fourierInstance = FourierSeries(ff = Ff)
 
@@ -646,26 +651,6 @@ class Estimator(Node):
                                            ))
 
 
-        # pfun =getConstraintsinJointSpace(self.robot,point_coord=[-0.25, 0.0, 0.1])
-        # pfun1 =getConstraintsinJointSpace(self.robot,point_coord=[-0.07, 0.0, 0.1])
-
-        # pfun2 =getConstraintsinJointSpace(self.robot,point_coord=[-0.25, 0.0, 0.1], 
-        #                                   base_link="lbr_link_4", base_joint_name="lbr_A4")
-        # pfun3 =getConstraintsinJointSpace(self.robot,point_coord=[-0.07, 0.0, 0.1],
-        #                                   base_link="lbr_link_4", base_joint_name="lbr_A4")
-
-        # pfun4 =getConstraintsinJointSpace(self.robot,point_coord=[-0.25, 0.0, 0.1], 
-        #                                   base_link="lbr_link_5", base_joint_name="lbr_A5")
-        # pfun5 =getConstraintsinJointSpace(self.robot,point_coord=[-0.07, 0.0, 0.1],
-        #                                   base_link="lbr_link_5", base_joint_name="lbr_A5")
-        
-        # pfun6 =getConstraintsinJointSpace(self.robot,point_coord=[-0.25, 0.0, 0.1], 
-        #                                   base_link="lbr_link_2", base_joint_name="lbr_A2")
-        # pfun7 =getConstraintsinJointSpace(self.robot,point_coord=[-0.07, 0.0, 0.1],
-        #                                   base_link="lbr_link_2", base_joint_name="lbr_A2")
-        
-
-
         Y_ = []
         Y_fri = []
         pfun_list = []
@@ -673,6 +658,8 @@ class Estimator(Node):
             # print("q_np = {0}".format(q_np))
             # q_np = np.random.uniform(-1.5, 1.5, size=7)
             tc = 1.0/(sampling_rate) * k
+            print("tc = ",tc)
+            
             q_list = [optas.substitute(id, t, tc) for id in fourier]#fourier(a,b,tc)
             qd_list = [optas.substitute(id, t, tc) for id in fourierDot] #fourierDot(a,b,tc)
             qdd_list = [optas.substitute(id, t, tc) for id in fourierDDot]#fourierDDot(a,b,tc)
@@ -683,7 +670,7 @@ class Estimator(Node):
 
             Y_temp = self.Ymat(q,
                                qd,
-                               qdd) @Pb 
+                               qdd) @Pb
             #[cs.sign(item) for item in qd_list])
             fri_ = cs.diag(cs.sign(qd))
             fri_ = cs.horzcat(fri_,  cs.diag(qd))
@@ -698,6 +685,7 @@ class Estimator(Node):
 
         Y_r = optas.vertcat(*Y_)
         Y_fri1 = optas.vertcat(*Y_fri)
+        # raise Exception("Run to here")
 
         Y = cs.horzcat(Y_r, Y_fri1)
 
@@ -743,7 +731,6 @@ class Estimator(Node):
 
 
                 cpr2 = min((l+1)*Ff/5.0*2.0*math.pi*q_max[i],q_vmax[i])
-
                 cpr = max((l+1)*Ff/5.0*2.0*math.pi*q_min[i],q_vmin[i])
                 lbg6.append(cpr)
                 lbg6.append(cpr)
@@ -763,99 +750,114 @@ class Estimator(Node):
             ubg4.append(q_max[i])
             ubg5.append(q_vmax[i])
 
-            # lbg.append(0.0)
-            # lbg.append(0.0)
-            # lbg.append(0.0)
-            # lbg.append(0.0)
-            # lbg.append(0.0)
-
-        
-        # g = cs.vertcat(*(a_eq1+  a_eq2+  b_eq1+  ab_sq_ineq1+ ab_sq_ineq2 + ab_sq_ineq3))
-        # lbg = cs.vertcat(*(lbg1,lbg2,lbg3,lbg4,lbg5,lbg6))
-        # ubg = cs.vertcat(*(ubg1,ubg2,ubg3,ubg4,ubg5,ubg6))
-
         g = cs.vertcat(*(a_eq1+  a_eq2+  b_eq1+  ab_sq_ineq1+ ab_sq_ineq2 + ab_sq_ineq3 +pfun_list))
         lbg = cs.vertcat(*(lbg1,lbg2,lbg3,lbg4,lbg5,lbg6, [0.0]*len(pfun_list)))
-        ubg = cs.vertcat(*(ubg1,ubg2,ubg3,ubg4,ubg5,ubg6, [100000.0]*len(pfun_list)))
+        ubg = cs.vertcat(*(ubg1,ubg2,ubg3,ubg4,ubg5,ubg6, [100000000000.0]*len(pfun_list)))
 
-        # print("sol['x'] = {0}".format(sol['x']),flush= True)
-        # print("ubg = ", ubg.shape)
-        # print("lbg = ", lbg.shape)
-        # print("g = ", g.shape)
+
         A = Y.T @ Y
+        # A = cs.simplify(A)
         # A = Y
-        # raise ValueError("run to here")
-        print("A = {0}".format(A.shape))
+        
         print("Y = {0}".format(Y.shape))
-        # raise ValueError("Run to here")
-
-        A_fun = optas.Function('A_fun',[a,b],[A])
-
-        shape = A.shape[0]
-        # f = cs.fmax(*A)
-        # U, V = find_eigen_value(7,5,A_fun,shape)
-
-        # print("U = {0}\n V = {1}".format(U,V))
-
-        # def objective(a,b):
-        #     # a,b = cs.vertsplit(cs.reshape(x,(10,7)),5)
-        #     # print("Run to here")
-        #     A_mat = A_fun(a,b)
-        #     # print("Run to here11")
-        #     # print(A_mat)
-        #     # U, s, V = np.linalg.svd(cs.DM(A_mat).full())
-        #     # return U.T @ A_mat @ V.T
-        #     return cs.trace(A_mat)
-
-        # raise ValueError("Run to here")
-
-        # A_reform = U.T @ A @ V.T
-        q_np = np.array([0.0]*7)
-        values=[]
-        for j in range(len(vfs_fun)):
-            values.append(vfs_fun[j](q_np))
-
-        print("values", values)
-
-        # raise ValueError("run to here")
-
-
 
         # f = -0.001*cs.norm_2(cs.norm_1(A_reform[0,0]/(A_reform[-1,-1]+0.01)))
         # f = -1.0*cs.norm_1(A_reform[0,0])
         # f = -1.0*cs.trace(A)/(A_reform[-1,-1]+0.1)
         A_inv = cs.inv(A)
         # f = -1.0*cs.trace(A)*cs.trace(A_inv)
-        f = 1.0*cs.trace(A)#*cs.trace(A)
+        # f = cs.sqrt(cs.fabs(1.0*cs.trace(A)))#*cs.trace(A)
+        # f = 1.0* cs.trace(A)
+
+
+        # _f = cs.simplify(1.0*cs.norm_fro(A)*cs.norm_fro(A_inv))
+        f = cs.simplify(1.0*cs.norm_fro(A) + cs.norm_fro(A_inv))
         x = cs.reshape(cs.vertcat(a,b),(1, 70))
         # fout = objective(a,b)
-        # print("Run to here11")
+        
         # f = cs.Function('f', [a,b], [fout])
         # print("x = {0}".format(x))
         # print("a = {0}, b ={1}".format(a,b))
         # print(" xx= {0},  {1}".format(x_split1,x_split2))
+        fc = optas.Function('fc',[a,b],[A])
+        f_fun = optas.Function('ff',[a,b],[f])
+        # _f_fun = optas.Function('f_ffc',[a,b],[_f])
+        g_fun = optas.Function('gf',[a,b],[g])
 
-        problem_init = {'x': x,'f':f, 'g':g[:-len(pfun_list)]}
-        S_init = cs.nlpsol('S', 'ipopt', problem_init,{'ipopt':{'max_iter':50000 }, 'verbose':False, 'bound_consistency':True})
-        sol_init = S_init(x0 = 0.5* np.random.random (size= (1,70)),lbg = lbg[:-len(pfun_list)], ubg = ubg[:-len(pfun_list)])
+        # filename = "f.mat"
+        # f_fun.save(filename)
+        # filename_g = "g.mat"
+        # g_fun.save(filename_g)
+        # lbg.save("lbg.mat")
+        # ubg.save("ubg.mat")
+        # problem_init = {'x': x,'f':f, 'g':g[:-len(pfun_list)]}
+        # S_init = cs.nlpsol('S', 'ipopt', problem_init,{'ipopt':{'max_iter':50000 }, 'verbose':False, 'bound_consistency':True})
+        # sol_init = S_init(x0 = 0.5* np.random.random (size= (1,70)),lbg = lbg[:-len(pfun_list)], ubg = ubg[:-len(pfun_list)])
+        # grad_y = cs.gradient(f, x)
+
+        # 创建一个CasADi函数来计算梯度
+        # grad_func = cs.Function('gradient', [x], [grad_y])
+
+        G_max = 3
+        values_f_min = 10e10
+        eps = 2.0
+
+        init_x0_best = eps* np.random.random (size= (1,70))
+        reject_sample = 1000
 
         problem = {'x': x,'f':f, 'g': g}
+        S = cs.nlpsol('S', 'ipopt', problem,
+                      {'ipopt':{'max_iter':50 }, 
+                       'verbose':False,
+                       "ipopt.hessian_approximation":"limited-memory"
+                       })
+        # problem_refine = {'x': x,'f':_f, 'g': g}
+        # S_refine = cs.nlpsol('S_refine', 'ipopt', problem_refine,
+        #               {'ipopt':{'max_iter':50 }, 
+        #                'verbose':False,
+        #                "ipopt.hessian_approximation":"limited-memory"
+        #                })
+        for iter in range(G_max):
+            # print("[1]    Iter = [{0}]".format(iter))
+            # x_sample_temp = 2.0* np.random.random (size= (1,70))
+            for num in range(reject_sample):
+                # print("[2]    Num = [{0}]".format(num))
+                x_sample_temp = eps* np.random.random (size= (1,70))
+                init_x0 = copy.deepcopy(x_sample_temp)
+                a_init, b_init =  np.split(x_sample_temp.reshape(10,7),2)
+                g_data = g_fun(a_init, b_init)
 
-        # print("Run to here22")
+                if(np.all(g_data < ubg) and np.all(g_data > lbg)):
+                    print("Find a initial solution here")
+                    break
+            init_x0 = copy.deepcopy(x_sample_temp)
+            a_init, b_init =  np.split(x_sample_temp.reshape(10,7),2)
+
+            sol = S(x0 = init_x0,lbg = lbg, ubg = ubg)
+            a_, b_ =  cs.vertsplit(cs.reshape(sol['x'],(10,7)),5)
+            values_f = f_fun(a_, b_)
+            if values_f_min > values_f:
+
+                print(" find a better value = {0}".format(values_f))
+                _x0_best = sol['x']
+                values_f_min = values_f
+                if (values_f < 1000):
+                    break
         
-        # S = cs.qpsol('solver', 'qpoases', problem)
-        S = cs.nlpsol('S', 'ipopt', problem,{'ipopt':{'max_iter':20000 }, 'verbose':False, 'bound_consistency':True})
-        # random.random (size= (3,4))
-        sol = S(x0 = sol_init['x'],lbg = lbg, ubg = ubg)
-        # sol = S(x0 = 0.1*np.ones([1,70]),lbg = lbg, ubg = ubg)
+        # sol = S_refine(x0 = _x0_best,lbg = lbg, ubg = ubg)
+        # _x0_best = sol['x']
+
 
         print("Run to here 33")
-        x_split1,x_split2 = cs.vertsplit(cs.reshape(sol['x'],(10,7)),5)
+        x_split1,x_split2 = cs.vertsplit(cs.reshape(_x0_best,(10,7)),5)
         # print("sol['x'] = {0}".format(sol['x']),flush= True)
 
-        print("sol = {0}".format(sol['x']))
+        print("sol = {0}".format(_x0_best))
 
-        return x_split1.full(),x_split2.full()
+
+
+
+        return x_split1.full(),x_split2.full(),fc
         # return sol['x']
 
     def generateToCsv(self, a, b,Ff, sampling_rate):
@@ -934,115 +936,6 @@ class Estimator(Node):
 
 
     
-
-    def timer_cb_regressor(self, positions, velocities, efforts):
-        
-        Pb, Pd, Kd =find_dyn_parm_deps(7,80,self.Ymat)
-        K = Pb.T +Kd @Pd.T
-
-        q_nps = []
-        qd_nps = []
-        qdd_nps = []
-        taus = []
-        Y_ = []
-        Y_fri = []
-        init_para = np.random.uniform(0.0, 0.1, size=50)
-        
-        for k in range(0,len(positions),1):
-            # print("q_np = {0}".format(q_np))
-            # q_np = np.random.uniform(-1.5, 1.5, size=7)
-            q_np = [positions[k][i] for i in Order]
-            # print("velocities[k] = {0}".format(velocities[k]))
-            qd_np = [velocities[k][i] for i in Order]
-            tau_ext = [efforts[k][i] for i in Order]
-
-            qdlast_np = [velocities[k-1][i] for i in Order]
-            # qdd_np = (np.array(qd_np)-np.array(qdlast_np))/(velocities[k][0]-velocities[k-1][0])
-            filter_list = [TD_2order(T=0.01) for i in range(len(qd_np))]
-            qdd_np = (np.array(qd_np)-np.array(qdlast_np))/0.01
-            qdd_np = qdd_np.tolist()
-            # qdd_np = [f(qd_np[id])[1] for id,f in enumerate(filter_list)]
-            
-            # qd_np = np.random.uniform(-0.2, 0.2, size=7)
-            # qdd_np = np.random.uniform(-0.1, 0.1, size=7)
-
-            # tau_ext = self.robot.rnea(q_np,qd_np,qdd_np)
-            
-
-            Y_temp = self.Ymat(q_np,
-                               qd_np,
-                               qdd_np) @Pb 
-            fri_ = np.diag([float(np.sign(item)) for item in qd_np])
-            fri_ = np.hstack((fri_,  np.diag(qd_np)))
-            # fri_ = [[np.sign(v), v] for v in qd_np]
-            
-            Y_.append(Y_temp)
-            # q_nps.append(q_np)
-            # qd_nps.append(qd_np)
-            # qdd_nps.append(qdd_np)
-            taus.append(tau_ext)
-            Y_fri.append(np.asarray(fri_))
-            
-            # print(qdd_np)
-
-        
-        Y_r = optas.vertcat(*Y_)
-        # q_nps1 = np.hstack(q_nps)
-        # qd_nps1 = np.hstack(qd_nps)
-        # qdd_nps1 = np.hstack(qdd_nps)
-        taus1 = np.hstack(taus)
-        Y_fri1 = np.vstack(Y_fri)
-        print("Y_fri1 = {0}".format(Y_fri1))
-        print("Y_fri1 = {0}".format(Y_fri1.shape))
-        print("Y_r = {0}".format(Y_r.shape))
-        print("Pb = {0}".format(Pb.shape))
-        pa_size = Y_r.shape[1]
-        
-        # solution=self.regress(init_para, q_nps1,qd_nps1,qdd_nps1,taus1)
-        # print("solution = {0}".format(solution[f"{self.pam_name}/y"]))
-
-        # print("taus1 size = {0}".format(taus1.shape))
-        # print("q_nps1 size = {0}".format(q_nps1.shape))
-        # print("qd_nps1 size = {0}".format(qd_nps1.shape))
-
-
-        taus1 = taus1.T
-
-
-        estimate_pam = np.linalg.inv(Y_r.T @ Y_r) @ Y_r.T @ taus1
-
-        #opti = cs.Opti()
-        # estimate_cs = cs.SX.sym('para', 50+14)
-
-        Y = cs.DM(np.hstack((Y_r, Y_fri1)))
-        estimate_pam = np.linalg.inv(Y.T @ Y) @ Y.T @ taus1
-        # para_friction = cs.SX.sym('para', 14)
-        
-
-        estimate_cs = cs.SX.sym('para', pa_size+14)
-        obj = cs.sumsqr(taus1 - Y @ estimate_cs)
-        # obj = cs.sumsqr(taus1 )
-
-        ref_pam = K @ self.PIvector(self.masses_np,self.massesCenter_np,self.Inertia_np)
-        
-        # lb = 0.5*ref_pam
-        # ub = 1.5*ref_pam
-
-        lb = 0.3*ref_pam
-        ub = -0.3*ref_pam
-
-        ineq_constr = [estimate_cs[i] >= lb[i] for i in range(pa_size)] + [estimate_cs[i] <= ub[i] for i in range(pa_size)]
-
-        problem = {'x': estimate_cs, 'f': obj, 'g': cs.vertcat(*ineq_constr)}
-        solver = cs.qpsol('solver', 'qpoases', problem)
-        # solver = cs.nlpsol('S', 'ipopt', problem,{'ipopt':{'max_iter':1500 }, 'verbose':True})
-        print("solver = {0}".format(solver))
-        sol = solver()
-
-        print("sol = {0}".format(sol['x']))
-
-        return sol['x']
-    
     def testWithEstimatedPara(self, positions, velocities, efforts, para)->None:
 
         Pb, Pd, Kd =find_dyn_parm_deps(7,80,self.Ymat)
@@ -1095,6 +988,175 @@ class Estimator(Node):
         with open(path1,"w") as csv_file:
             self.save_(csv_file,keys,[para])
 
+    def output_perform_with_full(self,a,b,path_f):
+
+        x = cs.reshape(cs.vertcat(a,b),(1, 70))
+
+        _f = cs.Function.load(path_f)
+        # _g = cs.Function.load(path_g)
+        f = _f(a,b)
+        # g = _g(a,b)
+        return f
+
+    
+
+
+    def load_analyse_data(self,path_f, path_g):
+
+        a = cs.SX.sym('a', 5,7)
+        b = cs.SX.sym('b', 5,7)
+
+        x = cs.reshape(cs.vertcat(a,b),(1, 70))
+
+        _f = cs.Function.load(path_f)
+        _g = cs.Function.load(path_g)
+        f = _f(a,b)
+        g = _g(a,b)
+
+
+        # problem = {'x': x,'f':f}
+        # S = cs.qpsol('solver', 'qpoases', problem)
+        # # S = cs.nlpsol('S', 'ipopt', problem,{'ipopt':{'max_iter':50 }, 'verbose':True})
+        # sol = S(x0  = 2.0* np.random.random (size= (1,70)))
+
+        # problem = {'x': x,'f':f, 'g': g}
+
+
+        G_max = 10
+        reject_sample = 100
+        # values_f_max = 10e10
+        values_f_min = 10e10
+        eps = 2.0
+
+        init_x0_best = 2.0* np.random.random (size= (1,70))
+
+        def objective_function(pop):
+            Alpha1 = 0.75
+            Alpha2 = 0.25
+            fitness = np.zeros(pop.shape[0])
+            for i in range(pop.shape[0]):
+                x = copy.deepcopy(pop[i])
+                a_init, b_init =  np.split(x.reshape(10,7),2)
+
+                # g_value = g_fun(a_init, b_init)
+
+                # con_a = np.linalg.norm(np.where(
+                #     g_value < ubg,
+                #     0.0,
+                #     g_value-ubg,
+                # ))
+                # con_b = np.linalg.norm(np.where(
+                #     lbg < g_value,
+                #     0.0,
+                #     lbg-g_value,
+                # ))
+
+                # print("data = ", Alpha1*f_fun(a_init, b_init).toarray().flatten() + 
+                #       Alpha2*(np.linalg.norm(ubg-g_fun(a_init, b_init).toarray().flatten()) + 
+                #               np.linalg.norm(g_fun(a_init, b_init).toarray().flatten()-lbg)))
+                fitness[i] = -Alpha1*_f(a_init, b_init) #- Alpha2*(con_a+con_b)
+            return fitness
+        
+        def selection(pop, fitness, pop_size):
+            next_generation = np.zeros((pop_size, pop.shape[1]))
+            elite = np.argmax(fitness)
+            # print("elite = ",elite)
+            next_generation[0] = pop[elite]  # keep the best
+            print("pop[elite]  = ",np.max(fitness))
+            fitness = np.delete(fitness,elite)
+            pop = np.delete(pop,elite,axis=0)
+            P = [f/sum(fitness) for f in fitness]  # selection probability
+            index = list(range(pop.shape[0]))
+            index_selected = np.random.choice(index, size=pop_size-1, replace=False, p=P)
+            s = 0
+            for j in range(pop_size-1):
+                next_generation[j+1] = pop[index_selected[s]]
+                s +=1
+            return next_generation
+        
+        def crossover(pop, crossover_rate):
+            offspring = np.zeros((crossover_rate, pop.shape[1]))
+            for i in range(int(crossover_rate/2)):
+                r1=random.randint(0, pop.shape[0]-1)
+                r2 = random.randint(0, pop.shape[0]-1)
+                while r1 == r2:
+                    r1 = random.randint(0, pop.shape[0]-1)
+                    r2 = random.randint(0, pop.shape[0]-1)
+                cutting_point = random.randint(1, pop.shape[1] - 1)
+                offspring[2*i, 0:cutting_point] = pop[r1, 0:cutting_point]
+                offspring[2*i, cutting_point:] = pop[r2, cutting_point:]
+                offspring[2*i+1, 0:cutting_point] = pop[r2, 0:cutting_point]
+                offspring[2*i+1, cutting_point:] = pop[r1, cutting_point:]
+            return offspring
+        
+        def mutation(pop, mutation_rate):
+            offspring = np.zeros((mutation_rate, pop.shape[1]))
+            for i in range(int(mutation_rate/2)):
+                r1=random.randint(0, pop.shape[0]-1)
+                r2 = random.randint(0, pop.shape[0]-1)
+                while r1 == r2:
+                    r1 = random.randint(0, pop.shape[0]-1)
+                    r2 = random.randint(0, pop.shape[0]-1)
+                cutting_point = random.randint(0, pop.shape[1]-1)
+                offspring[2*i] = pop[r1]
+                offspring[2*i,cutting_point] = pop[r2,cutting_point]
+                offspring[2*i+1] = pop[r2]
+                offspring[2*i+1, cutting_point] = pop[r1, cutting_point]
+            return offspring
+        
+        def local_search(pop, n_sol, step_size):
+            # number of offspring chromosomes generated from the local search
+            offspring = np.zeros((n_sol, pop.shape[1]))
+            for i in range(n_sol):
+                r1 = np.random.randint(0, pop.shape[0])
+                chromosome = pop[r1, :]
+                r2 = np.random.randint(0, pop.shape[1])
+                chromosome[r2] += np.random.uniform(-step_size, step_size)
+                if chromosome[r2] < eps:
+                    chromosome[r2] = eps
+                if chromosome[r2] > -eps:
+                    chromosome[r2] = -eps
+
+                offspring[i,:] = chromosome
+            return offspring
+        
+        rate_crossover = 20         # number of chromosomes that we apply crossower to
+        rate_mutation = 20          # number of chromosomes that we apply mutation to
+        rate_local_search = 10      # number of chromosomes that we apply local_search to
+        step_size = 0.02
+        pop_size = 100
+
+        pop = 2.0* np.random.random (size= (pop_size,70))
+        
+        for iter in range(G_max):
+            offspring_from_crossover = crossover(pop, rate_crossover)
+            offspring_from_mutation = mutation(pop, rate_mutation)
+            offspring_from_local_search = local_search(pop, rate_local_search, step_size)
+            
+            # we append childrens Q (cross-overs, mutations, local search) to paraents P
+            # having parents in the mix, i.e. allowing for parents to progress to next iteration - Elitism
+            pop = np.append(pop, offspring_from_crossover, axis=0)
+            pop = np.append(pop, offspring_from_mutation, axis=0)
+            pop = np.append(pop, offspring_from_local_search, axis=0)
+            # print(pop.shape)
+            fitness_values = objective_function(pop)
+            pop = selection(pop, fitness_values, pop_size)  # we arbitrary set desired pereto front size = pop_size
+            print('iteration: {0}  p: [{1}]'.format(iter, pop[0]))
+
+        init_x0_best = pop[0]
+        x_temp = copy.deepcopy(init_x0_best)
+        a_init, b_init =  np.split(x_temp.reshape(10,7),2)
+        output = _f(a_init, b_init)
+        print("x_temp=", x_temp)
+        raise ValueError("Run to here {0}".format(output))
+
+        sparsity_f = cs.sparsity(_f(a,b))
+        sparsity_g = cs.sparsity(_g(a,b))
+
+        sparsity_f.save("f_sparsity.mat")
+        sparsity_g.save("g_sparsity.mat")
+
+
 
 
 
@@ -1104,27 +1166,32 @@ class Estimator(Node):
 def main(args=None):
     rclpy.init(args=args)
     paraEstimator = Estimator()
-    Ff = 0.01
-    sampling_rate = 0.1
-    a,b = paraEstimator.generate_opt_traj(Ff = Ff,sampling_rate = sampling_rate)
+    Ff = 0.1
+    sampling_rate = 100.0
+    # paraEstimator.load_analyse_data("f.mat", "g.mat")
+
+
+
+
+
+    a,b,fc = paraEstimator.generate_opt_traj(Ff = Ff,sampling_rate = sampling_rate/10)
     print("a = {0} \n b = {1}".format(a,b))
+    # print("performance = {0} ".format(paraEstimator.output_perform_with_full(a,b,"f.mat")))
     # a, b = np.ones([5,7]),np.ones([5,7])
     # print("a = {0} \n b = {1}".format(type(a),type(b)))
 
-    ret = paraEstimator.generateToCsv(a,b,Ff = Ff,sampling_rate=sampling_rate*1000.0)
+    ret = paraEstimator.generateToCsv(a,b,Ff = Ff,sampling_rate=sampling_rate)
     if ret:
         print("Done! Congratulations! self-collision avoidance")
+        
+        eigenvalues, eigenvectors = np.linalg.eig(fc(a,b))
+
+        print("fc = ",eigenvalues)
 
 
 
-    # positions, velocities, efforts = paraEstimator.ExtractFromMeasurmentCsv()
-    # estimate_pam = paraEstimator.timer_cb_regressor(positions, velocities, efforts)
-    # print("estimate_pam = {0}".format(estimate_pam))
-    # paraEstimator.testWithEstimatedPara(positions, velocities, efforts,estimate_pam)
-    # paraEstimator.saveEstimatedPara(estimate_pam)
 
     rclpy.shutdown()
-
 
 
 if __name__ == "__main__":

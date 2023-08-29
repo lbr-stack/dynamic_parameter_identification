@@ -468,12 +468,12 @@ class Estimator(Node):
         super().__init__(node_name=node_name)
 
         self.dt_ = dt_
-        self.declare_parameter("model", "med7")
+        self.declare_parameter("model", "med7dock")
         self.model_ = str(self.get_parameter("model").value)
         path = os.path.join(
-            get_package_share_directory("lbr_description"),
+            get_package_share_directory("med7_dock_description"),
             "urdf",
-            self.model_,
+            # self.model_,
             f"{self.model_}.urdf.xacro",
         )
         self.N = N_
@@ -617,199 +617,7 @@ class Estimator(Node):
 
 
         return pos_l,vel_l,tau_ext_l    
-        
-    
-    def generate_opt_traj(self,Ff, sampling_rate, Rank=5, 
-                          q_min=-20.0*np.ones(7), q_max =20.0*np.ones(7),
-                          q_vmin=-10.0*np.ones(7),q_vmax=10.0*np.ones(7)):
-
-        Pb, Pd, Kd =find_dyn_parm_deps(7,80,self.Ymat)
-
-        
-        # sampling_rate = 0.1
-        pointsNum = int(sampling_rate/(Ff*4))
-
-        fourierInstance = FourierSeries(ff = Ff)
-
-        a = cs.SX.sym('a', 5,7)
-        b = cs.SX.sym('b', 5,7)
-        t = cs.SX.sym('t', 1)
-
-        fourierF = fourierInstance.FourierFunction(t, a, b,'f1')
-        fourier = fourierF(a,b,t)
-
-        fourierDot = [optas.jacobian(fourier[i],t) for i in range(len(fourier))]
-        fourierDDot = [optas.jacobian(fourierDot[i],t) for i in range(len(fourierDot))]
-
-        print(fourierDot)
-
-        Y_ = []
-        Y_fri = []
-        for k in range(pointsNum):
-            # print("q_np = {0}".format(q_np))
-            # q_np = np.random.uniform(-1.5, 1.5, size=7)
-            tc = 1.0/(sampling_rate) * k
-            q_list = [optas.substitute(id, t, tc) for id in fourier]#fourier(a,b,tc)
-            qd_list = [optas.substitute(id, t, tc) for id in fourierDot] #fourierDot(a,b,tc)
-            qdd_list = [optas.substitute(id, t, tc) for id in fourierDDot]#fourierDDot(a,b,tc)
-            q = cs.vertcat(*q_list)
-            qd = cs.vertcat(*qd_list)
-            qdd = cs.vertcat(*qdd_list)
-
-
-            Y_temp = self.Ymat(q,
-                               qd,
-                               qdd) @Pb 
-            #[cs.sign(item) for item in qd_list])
-            fri_ = cs.diag(cs.sign(qd))
-            fri_ = cs.horzcat(fri_,  cs.diag(qd))
-            # fri_ = [[np.sign(v), v] for v in qd_np]
-            
-            Y_.append(Y_temp)
-            # q_nps.append(q_np)
-            # qd_nps.append(qd_np)
-            # qdd_nps.append(qdd_np)
-            # taus.append(tau_ext)
-            Y_fri.append(fri_)
-
-        Y_r = optas.vertcat(*Y_)
-        Y_fri1 = optas.vertcat(*Y_fri)
-
-        Y = cs.horzcat(Y_r, Y_fri1)
-
-        # print(Y)
-        a_eq1 = [0.0]*7
-        a_eq2 = [0.0]*7
-        b_eq1 = [0.0]*7
-        ab_sq_ineq1 = [0.0]*7
-        ab_sq_ineq2 = [0.0]*7
-        ab_sq_ineq3 = []
-
-        lbg1 = []
-        lbg2 = []
-        lbg3 = []
-        lbg4 = []
-        lbg5 = []
-        lbg6 = []
-        
-
-        ubg1 = []
-        ubg2 = []
-        ubg3 = []
-        ubg4 = []
-        ubg5 = []
-        ubg6 = []
-        # ab_sq_ineq4 = []
-        for i in range(7):
-            for l in range(5):
-                print("iter {0}, {1}".format(i, l))
-                a_eq1[i] = a_eq1[i] + a[l,i]/(l+1)
-                b_eq1[i] = b_eq1[i] + b[l,i]
-                a_eq2[i] = a_eq1[i] + a[l,i]*(l+1)
-
-                wl = ((l+1) * Ff* math.pi* 2.0) 
-                ab_sq_ineq1[i] = (ab_sq_ineq1[i]+ 
-                1.0/(wl)* cs.sqrt(a[l,i]*a[l,i] + b[l,i]*b[l,i]))
-
-                ab_sq_ineq2[i] = (ab_sq_ineq1[i]+ 
-                cs.sqrt(a[l,i]*a[l,i] + b[l,i]*b[l,i]))
-
-                ab_sq_ineq3.append(a[l,i])
-                ab_sq_ineq3.append(b[l,i])
-
-                cpr = max((l+1)*Ff/5.0*q_min[i],q_vmin[i])
-                cpr2 = min((l+1)*Ff/5.0*q_max[i],q_vmax[i])
-                lbg6.append(cpr)
-                lbg6.append(cpr)
-
-                ubg6.append(cpr2)
-                ubg6.append(cpr2)
-
-            lbg1.append(0.0)
-            lbg2.append(0.0)
-            lbg3.append(0.0)
-            lbg4.append(0.0)
-            lbg5.append(0.0)
-
-            ubg1.append(0.0)
-            ubg2.append(0.0)
-            ubg3.append(0.0)
-            ubg4.append(q_max[i])
-            ubg5.append(q_vmax[i])
-
-            # lbg.append(0.0)
-            # lbg.append(0.0)
-            # lbg.append(0.0)
-            # lbg.append(0.0)
-            # lbg.append(0.0)
-
-
-
-        g = cs.vertcat(*(a_eq1+  a_eq2+  b_eq1+  ab_sq_ineq1+ ab_sq_ineq2 + ab_sq_ineq3))
-        lbg = cs.vertcat(*(lbg1,lbg2,lbg3,lbg4,lbg5,lbg6))
-        ubg = cs.vertcat(*(ubg1,ubg2,ubg3,ubg4,ubg5,ubg6))
-
-        # print("sol['x'] = {0}".format(sol['x']),flush= True)
-        A = Y.T @ Y
-
-        print("A = {0}".format(A.shape))
-        print("Y = {0}".format(Y.shape))
-        # raise ValueError("Run to here")
-
-        A_fun = optas.Function('A_fun',[a,b],[A])
-
-        shape = A.shape[0]
-        # f = cs.fmax(*A)
-        U, V = find_eigen_value(7,5,A_fun,shape)
-
-        print("U = {0}\n V = {1}".format(U,V))
-
-        # def objective(a,b):
-        #     # a,b = cs.vertsplit(cs.reshape(x,(10,7)),5)
-        #     # print("Run to here")
-        #     A_mat = A_fun(a,b)
-        #     # print("Run to here11")
-        #     # print(A_mat)
-        #     # U, s, V = np.linalg.svd(cs.DM(A_mat).full())
-        #     # return U.T @ A_mat @ V.T
-        #     return cs.trace(A_mat)
-
-        # raise ValueError("Run to here")
-
-        # A_reform = U.T @ A @ V.T
-
-
-
-        # f = -0.001*cs.norm_2(cs.norm_1(A_reform[0,0]/(A_reform[-1,-1]+0.01)))
-        # f = -1.0*cs.norm_1(A_reform[0,0])
-        # f = -1.0*cs.trace(A)/(A_reform[-1,-1]+0.1)
-        A_inv = cs.inv(A)
-        f = -1.0*cs.trace(A)*cs.trace(A_inv)
-        x = cs.reshape(cs.vertcat(a,b),(1, 70))
-        # fout = objective(a,b)
-        # print("Run to here11")
-        # f = cs.Function('f', [a,b], [fout])
-        # print("x = {0}".format(x))
-        # print("a = {0}, b ={1}".format(a,b))
-        # print(" xx= {0},  {1}".format(x_split1,x_split2))
-        problem = {'x': x,'f':f, 'g': g}
-        # S = cs.qpsol('solver', 'qpoases', problem)
-
-        # print("Run to here22")
-        
-        S = cs.nlpsol('S', 'ipopt', problem,{'ipopt':{'max_iter':1500 }, 'verbose':True})
-        # random.random (size= (3,4))
-        sol = S(x0 = 0.5* np.random.random (size= (1,70)),lbg = lbg, ubg = ubg)
-        # sol = S(x0 = 0.1*np.ones([1,70]),lbg = lbg, ubg = ubg)
-
-        print("Run to here 33")
-        x_split1,x_split2 = cs.vertsplit(cs.reshape(sol['x'],(10,7)),5)
-        # print("sol['x'] = {0}".format(sol['x']),flush= True)
-
-        print("sol = {0}".format(sol['x']))
-
-        return x_split1.full(),x_split2.full()
-        # return sol['x']
+       
 
     def generateToCsv(self, a, b,Ff, sampling_rate):
         
@@ -976,12 +784,18 @@ class Estimator(Node):
         obj = cs.sumsqr(taus1 - Y @ estimate_cs)
         # obj = cs.sumsqr(taus1 )
 
-        lb = -10000000.0*np.array([1.0]*(pa_size+14))
-        ub = 10000000.0*np.array([1.0]*(pa_size+14))
-        ref_pam = K @ self.PIvector(self.masses_np,self.massesCenter_np,self.Inertia_np)
+        lb = -2.0*np.array([1.0]*(pa_size+14))
+        ub = 2.0*np.array([1.0]*(pa_size+14))
+
+        print("self.masses_npv", self.masses_np.shape)
+        # ref_pam = K @ self.PIvector(self.masses_np,self.massesCenter_np,self.Inertia_np)
+        ref_pam = K @ self.PIvector(self.masses_np,self.massesCenter_np,self.Inertia_np).toarray().flatten()
+
+        print("ref_pam = ",ref_pam.shape)
+        print("lb = ",lb.shape)
         
-        lb[:pa_size] = -2.5*ref_pam
-        ub[:pa_size] = 2.5*ref_pam
+        lb[:pa_size] = 0.7*ref_pam
+        ub[:pa_size] = 1.2*ref_pam
 
 
         # lb = 0.3*ref_pam
@@ -1061,41 +875,6 @@ class Estimator(Node):
             self.save_(csv_file,keys,[para])
         
 
-        # for k in range(1,len(positions),1):
-        #     # q_np = positions[k][4,1,2,3,5,6,7]
-        #     # qd_np = velocities[k][4,1,2,3,5,6,7]
-        #     # tau_ext = efforts[k][4,1,2,3,5,6,7]
-        #     # qdd_np = (np.array(velocities[k][4,1,2,3,5,6,7])-np.array(velocities[k-1][4,1,2,3,5,6,7]))/(velocities[k][0]-velocities[k-1][0])
-        #     # qdd_np = qdd_np.tolist()
-
-        #     q_np = [positions[k][i] for i in Order]
-        #     qd_np = [velocities[k][i] for i in Order]
-        #     tau_ext = [efforts[k][i] for i in Order]
-
-        #     qdlast_np = [velocities[k-1][i] for i in Order]
-        #     # qdd_np = (np.array(qd_np)-np.array(qdlast_np))/0.01#(velocities[k][0]-velocities[k-1][0])
-        #     # qdd_np = qdd_np.tolist()
-        #     filter_list = [TD_2order(T=0.01) for i in range(len(qd_np))]
-        #     qdd_np = (np.array(qd_np)-np.array(qdlast_np))/0.01
-        #     qdd_np = qdd_np.tolist()
-        #     # qdd_np = [f(qd_np[id])[1] for id,f in enumerate(filter_list)]
-
-        #     # tau_ext = self.robot.rnea(q_np,qd_np,qdd_np)
-        #     # e=self.Ymat(q_np,qd_np,qdd_np)@Pb @ (solution[f"{self.pam_name}/y"] -  K @real_pam)
-        #     # print("error = {0}".format(e))
-
-        #     # e=self.Ymat(q_np,qd_np,qdd_np)@Pb @  para - tau_ext 
-            # e=(self.Ymat(q_np,qd_np,qdd_np)@Pb @  para[:50] + 
-            #     np.diag(np.sign(qd_np)) @ para[50:57]+ 
-            #     np.diag(qd_np) @ para[57:]) - tau_ext 
-            # print("error1 = {0}".format(e))
-            # print("tau_ext = {0}".format(tau_ext))
-
-        # print("taus1 size = {0}".format(taus1.shape))
-        # print("q_nps1 size = {0}".format(q_nps1.shape))
-        # print("qd_nps1 size = {0}".format(qd_nps1.shape))
-
-        # real_pam=self.PIvector(self.masses_np,self.massesCenter_np,self.Inertia_np)
 
 def view_variables_in_joint_space(states):
     cols = []

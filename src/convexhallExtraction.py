@@ -73,7 +73,7 @@ def main():
     vis = o3d.visualization.Visualizer()
     vis.create_window()
     vis.add_geometry(mesh)
-    vis.add_geometry(point_cloud_o3d_GMM)
+    vis.add_geometry(point_cloud_o3d)
     vis.run()
     vis.destroy_window()
 

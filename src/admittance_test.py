@@ -1,18 +1,16 @@
 #!/usr/bin/python3
 import os
-import time
 
-import kinpy
 import numpy as np
 np.set_printoptions(precision=3, suppress=True, linewidth=1000)
 import rclpy
 from rclpy.executors import SingleThreadedExecutor, MultiThreadedExecutor
 import xacro
 from ament_index_python import get_package_share_directory
-from rclpy import qos
+
 from rclpy.node import Node
 from rclpy.duration import Duration
-from rclpy.executors import MultiThreadedExecutor
+
 from rclpy.qos import QoSProfile, ReliabilityPolicy
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup, ReentrantCallbackGroup
 
@@ -111,12 +109,13 @@ class AdmittanceController(object):
         path_pos = os.path.join(
             get_package_share_directory("gravity_compensation"),
             "test",
-            "DynamicParameters_dgr0.csv",
+            "DynamicParameters.csv",
         )
         self.params = ExtractFromParamsCsv(path_pos)
         self.pa_size = Pb.shape[1]
-        self._is_init = True
+        self._is_init = False
         self.tau_model = np.array([0.0]*7)
+        self.tau_model_th_ = np.array([90.0, 90.0, 90.0, 70.0, 70.0, 70.0,50.0])
 
     def __call__(self, lbr_state: LBRState) -> LBRCommand:
         self.q_ = np.array(lbr_state.measured_joint_position.tolist())
@@ -124,10 +123,10 @@ class AdmittanceController(object):
 
         # print("lbr_state.measured_joint_position.tolist()", len(lbr_state.measured_joint_position.tolist()))
 
-        if (self._is_init):
+        if not self._is_init:
             self.q_last = copy.deepcopy(self.q_)
             # c = 
-            self._is_init = False
+            self._is_init = True
 
             self.lbr_command_.joint_position = (
                 np.array(lbr_state.measured_joint_position.tolist())
@@ -136,8 +135,8 @@ class AdmittanceController(object):
             return self.lbr_command_
 
         q = copy.deepcopy(self.q_)
-        self.qd = (self.q_-self.q_last)/0.01
-        qdd = (self.qd-self.qd_last)/0.01
+        self.qd = (self.q_-self.q_last)*0.01
+        qdd = (self.qd-self.qd_last)*0.01
 
         # print("q = ",self.q_)
         # print("self.q_", self.q_)
@@ -152,12 +151,18 @@ class AdmittanceController(object):
                 np.diag(self.qd) @ self.params[self.pa_size+7:]).toarray().flatten()
         
 
+        self.tau_model = np.where(
+            abs(self.tau_model) < self.tau_model_th_,
+            self.tau_model,
+            np.sign(self.tau_model)*self.tau_model_th_,
+        )
+        
+
         self.jacobian_ = self.jacobian_func_(self.q_)
 
         self.jacobian_inv_ = np.linalg.pinv(self.jacobian_, rcond=0.05)
         self.tau_ext_ = self.tau_ext_raw - self.tau_model  #.toarray().flatten()
 
-        print("self.tau_ext_", self.tau_ext_raw)
 
         self.f_ext_ = self.jacobian_inv_.T @ self.tau_ext_
 
@@ -168,19 +173,14 @@ class AdmittanceController(object):
             self.dx_gain_ @ np.sign(self.f_ext_) * (abs(self.f_ext_) - self.f_ext_th_),
             0.0,
         )
-        # print("self.f_ext_", self.f_ext_)
-        # print("self.jacobian_inv_", self.jacobian_inv_.shape)
-        # print("self.f_ext_", self.tau_ext_.shape)
-        # print("self.jacobian_inv_", self.jacobian_inv_)
-
-        # additional smoothing required in python
-        # self.dq_ = self.dq_gain_ @ self.jacobian_inv_ @ self.f_ext_
+        
         self.dq_ = (
             self.alpha_ * self.dq_
             + (1 - self.alpha_) * self.dq_gain_ @ self.jacobian_inv_ @ self.f_ext_
         )
-        # print("self.dq_", lbr_state.sample_time)
-        # print("self.dq_", self.dq_)
+
+
+
 
         # self.dq_ = 50*np.ones(7)
 
@@ -189,10 +189,13 @@ class AdmittanceController(object):
             + lbr_state.sample_time * self.dq_
         ).data
 
+        print("self.dq_", self.dq_)
 
-        csv_save("/home/thy/ros2_ws/tau_model.csv", self.tau_model)
+        data_record = np.array(self.tau_model.tolist()+self.dq_.tolist() +self.q_.tolist())
+        # csv_save("/home/thy/ros2_ws/tau_model.csv", self.tau_model)
         csv_save("/home/thy/ros2_ws/tau_ext_raw.csv", self.tau_ext_raw)
-
+        # csv_save("/home/thy/ros2_ws/f_ext_c.csv", self.f_ext_)
+        csv_save("/home/thy/ros2_ws/data_record.csv", data_record)
 
         self.qd_last = copy.deepcopy(self.qd)
         self.q_last = copy.deepcopy(self.q_)
@@ -260,25 +263,29 @@ class AdmittanceControlNode(Node):
         self.lbr_command_pub_.publish(lbr_command)
 
     def smooth_lbr_state_(self, lbr_state: LBRState, alpha: float):
+        # pos_list = lbr_state.measured_joint_position.tolist()
+        # print("lbr_state.measured_joint_position.tolist()", lbr_state.measured_joint_position.tolist())
         if not self.init_:
             self.lbr_state_ = lbr_state
             self.init_ = True
             return
 
         self.lbr_state_.measured_joint_position = (
-            (1 - alpha) * np.array(self.lbr_state_.measured_joint_position.tolist())
+            (1.0 - alpha) * np.array(self.lbr_state_.measured_joint_position.tolist())
             + alpha * np.array(lbr_state.measured_joint_position.tolist())
         ).data
 
         self.lbr_state_.external_torque = (
-            (1 - alpha) * np.array(self.lbr_state_.external_torque.tolist())
+            (1.0 - alpha) * np.array(self.lbr_state_.external_torque.tolist())
             + alpha * np.array(lbr_state.external_torque.tolist())
         ).data
 
         self.lbr_state_.measured_torque = (
-            (1 - alpha) * np.array(self.lbr_state_.measured_torque.tolist())
+            (1.0 - alpha) * np.array(self.lbr_state_.measured_torque.tolist())
             + alpha * np.array(lbr_state.measured_torque.tolist())
         ).data
+
+        # print("self.lbr_state_.measured_joint_position",self.lbr_state_.measured_joint_position)
 
 
 
