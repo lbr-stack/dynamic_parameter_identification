@@ -803,7 +803,7 @@ class Estimator(Node):
         eps = 2.0
 
         init_x0_best = eps* np.random.random (size= (1,70))
-        reject_sample = 1000
+        reject_sample = 100
 
         problem = {'x': x,'f':f, 'g': g}
         S = cs.nlpsol('S', 'ipopt', problem,
@@ -1174,7 +1174,7 @@ def main(args=None):
 
 
 
-    a,b,fc = paraEstimator.generate_opt_traj(Ff = Ff,sampling_rate = sampling_rate/10)
+    a,b,fc = paraEstimator.generate_opt_traj(Ff = Ff,sampling_rate = sampling_rate/10.0)
     print("a = {0} \n b = {1}".format(a,b))
     # print("performance = {0} ".format(paraEstimator.output_perform_with_full(a,b,"f.mat")))
     # a, b = np.ones([5,7]),np.ones([5,7])
