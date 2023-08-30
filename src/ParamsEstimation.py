@@ -606,7 +606,7 @@ class Estimator(Node):
     
     def generate_opt_traj(self,Ff, sampling_rate, Rank=5, 
                           q_min=-2.0*np.ones(7), q_max =2.0*np.ones(7),
-                          q_vmin=-1.0*np.ones(7),q_vmax=1.0*np.ones(7),
+                          q_vmin=-0.6*np.ones(7),q_vmax=0.6*np.ones(7),
                           f_path = None, g_path=None):
 
         Pb, Pd, Kd =find_dyn_parm_deps(7,80,self.Ymat)
@@ -798,7 +798,7 @@ class Estimator(Node):
         # 创建一个CasADi函数来计算梯度
         # grad_func = cs.Function('gradient', [x], [grad_y])
 
-        G_max = 3
+        G_max = 3# 100 太多了
         values_f_min = 10e10
         eps = 2.0
 

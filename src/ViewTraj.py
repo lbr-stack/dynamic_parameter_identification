@@ -103,7 +103,7 @@ def view_Cartesian_pose(measuements, N):
         )
     ax = plt.figure().add_subplot(projection='3d')
 
-    robot = optas.RobotModel(urdf_string=path)
+    robot = optas.RobotModel(xacro_filename=path)
     
 
     
@@ -111,9 +111,13 @@ def view_Cartesian_pose(measuements, N):
         for i in range(N+1):
             ss[i].append(mes[i])
 
-        pos = robot.get_global_link_position(
+        x,y,z = robot.get_global_link_position(
             end_effector_link, np.asarray(mes[1:8])
-        )
+        ).toarray().flatten()
+
+        pos[0].append(x)
+        pos[1].append(y)
+        pos[2].append(z)
 
     
     # for i in range(1,N+1):
@@ -151,3 +155,4 @@ filename3 = "/home/thy/target traj/17/target_joint_states.csv"
 fs = load_measurements(filename3)
 # view_states(fs,7)
 view_states_in_one(fs, 7)
+view_Cartesian_pose(fs, 7)
