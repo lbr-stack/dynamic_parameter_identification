@@ -149,7 +149,7 @@ def quaternion_to_rotation_matrix(q):
 # id_str = "51"
 # filename = id_str+'/pose_bt.csv'
 # filename2 = id_str+'/pose_br.csv'/home/thy/target traj
-filename3 = "/home/thy/target traj/17/target_joint_states.csv"
+filename3 = "/home/thy/target traj/18/target_joint_states.csv"
 
 
 fs = load_measurements(filename3)

@@ -606,7 +606,7 @@ class Estimator(Node):
     
     def generate_opt_traj(self,Ff, sampling_rate, Rank=5, 
                           q_min=-2.0*np.ones(7), q_max =2.0*np.ones(7),
-                          q_vmin=-0.6*np.ones(7),q_vmax=0.6*np.ones(7),
+                          q_vmin=-4.0*np.ones(7),q_vmax=4.0*np.ones(7),
                           f_path = None, g_path=None):
 
         Pb, Pd, Kd =find_dyn_parm_deps(7,80,self.Ymat)
@@ -860,11 +860,13 @@ class Estimator(Node):
         return x_split1.full(),x_split2.full(),fc
         # return sol['x']
 
-    def generateToCsv(self, a, b,Ff, sampling_rate):
+    def generateToCsv(self, a, b,Ff, sampling_rate,path=None,scale=1.0):
         
         assert a.shape == b.shape
-
-        path1 = "/tmp/target_joint_states.csv"
+        if path is None:
+            path1 = "/tmp/target_joint_states.csv"
+        else:
+            path1 = path
 
         fourierInstance1 = FourierSeries(ff = Ff)
 
@@ -899,9 +901,9 @@ class Estimator(Node):
             # f = fourierF(np.asarray(a),np.asarray(b),tc)
             # f = _f(tc)
             # print("b = {0}".format(b))
-            f_temp =fourierInstance1.FourierValue(a,b,tc)
+            f_temp =fourierInstance1.FourierValue(a,b,scale*tc)
             # print("f_temp = {0}".format(f_temp))
-            fd_temp=_fDot(np.asarray(a),np.asarray(b),tc)
+            fd_temp=_fDot(np.asarray(a),np.asarray(b),scale*tc)
             
             q_list = [float(id) for id in f_temp]#fourier(a,b,tc)
             qd_list = [float(id) for id in fd_temp] #fourierDot(a,b,tc)
@@ -1181,6 +1183,8 @@ def main(args=None):
     # print("a = {0} \n b = {1}".format(type(a),type(b)))
 
     ret = paraEstimator.generateToCsv(a,b,Ff = Ff,sampling_rate=sampling_rate)
+
+    # ret = paraEstimator.generateToCsv(a,b,Ff = Ff,sampling_rate=sampling_rate,path = "/tmp/target_joint_states_scaled.csv",scale=10.0)
     if ret:
         print("Done! Congratulations! self-collision avoidance")
         

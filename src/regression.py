@@ -1001,7 +1001,7 @@ def main(args=None):
     path_pos = os.path.join(
             get_package_share_directory("gravity_compensation"),
             "test",
-            "measurements_0dgr.csv",
+            "measurements.csv",
         )
 
     positions, velocities, efforts = paraEstimator.ExtractFromMeasurmentCsv(path_pos)
@@ -1015,6 +1015,19 @@ def main(args=None):
     tau_exts, es =paraEstimator.testWithEstimatedPara(positions, velocities, efforts_f,estimate_pam)
     paraEstimator.saveEstimatedPara(estimate_pam)
     compare_traj(tau_exts, efforts_f)
+
+
+    path_pos_2 = os.path.join(
+            get_package_share_directory("gravity_compensation"),
+            "test",
+            "measurements_0dgr.csv",
+        )
+
+    positions_, velocities_, efforts_ = paraEstimator.ExtractFromMeasurmentCsv(path_pos_2)
+    velocities_=traj_filter(velocities_)
+    efforts_f_=traj_filter(efforts_)
+    tau_exts_, es =paraEstimator.testWithEstimatedPara(positions_, velocities_, efforts_f_,estimate_pam)
+    compare_traj(tau_exts_, efforts_f_)
 
     rclpy.shutdown()
 
