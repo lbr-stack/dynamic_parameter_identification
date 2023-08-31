@@ -135,8 +135,8 @@ class AdmittanceController(object):
             return self.lbr_command_
 
         q = copy.deepcopy(self.q_)
-        self.qd = (self.q_-self.q_last)*0.01
-        qdd = (self.qd-self.qd_last)*0.01
+        self.qd = (self.q_-self.q_last)/0.01
+        qdd = (self.qd-self.qd_last)/0.01
 
         # print("q = ",self.q_)
         # print("self.q_", self.q_)
@@ -167,6 +167,7 @@ class AdmittanceController(object):
         self.f_ext_ = self.jacobian_inv_.T @ self.tau_ext_
 
         # print("self.f_ext_ = ",self.f_ext_)
+        print("tau_ext_", self.tau_ext_)
 
         self.f_ext_ = np.where(
             abs(self.f_ext_) > self.f_ext_th_,
@@ -189,13 +190,13 @@ class AdmittanceController(object):
             + lbr_state.sample_time * self.dq_
         ).data
 
-        print("self.dq_", self.dq_)
+        
 
         data_record = np.array(self.tau_model.tolist()+self.dq_.tolist() +self.q_.tolist())
         # csv_save("/home/thy/ros2_ws/tau_model.csv", self.tau_model)
-        csv_save("/home/thy/ros2_ws/tau_ext_raw.csv", self.tau_ext_raw)
-        # csv_save("/home/thy/ros2_ws/f_ext_c.csv", self.f_ext_)
-        csv_save("/home/thy/ros2_ws/data_record.csv", data_record)
+        # csv_save("/home/thy/ros2_ws/tau_ext_raw.csv", self.tau_ext_raw)
+        # # csv_save("/home/thy/ros2_ws/f_ext_c.csv", self.f_ext_)
+        # csv_save("/home/thy/ros2_ws/data_record.csv", data_record)
 
         self.qd_last = copy.deepcopy(self.qd)
         self.q_last = copy.deepcopy(self.q_)
