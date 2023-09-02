@@ -57,9 +57,9 @@ class AdmittanceController(object):
         robot_description: str,
         base_link: str = "lbr_link_0",
         end_effector_link: str = "lbr_link_ee",
-        f_ext_th: np.ndarray = np.array([2.0, 2.0, 2.0, 0.5, 0.5, 0.5]),
+        f_ext_th: np.ndarray = np.array([2.0, 2.0, 2.0, 0.5, 0.5, 5.5]),
         dq_gain: np.ndarray = np.array([1.5, 1.5, 1.5, 1.5, 1.5, 1.5, 1.5]),
-        dx_gain: np.ndarray = np.array([0.2, 0.2, 0.2, 10.0, 10.0, 10.0]),
+        dx_gain: np.ndarray = np.array([0.3, 0.3, 0.3, 10.0, 10.0, 10.0]),
     ) -> None:
         self.lbr_command_ = LBRCommand()
         # self.declare_parameter("model", "med7dock")
@@ -174,6 +174,8 @@ class AdmittanceController(object):
             self.dx_gain_ @ np.sign(self.f_ext_) * (abs(self.f_ext_) - self.f_ext_th_),
             0.0,
         )
+
+        print("f_ext_", self.f_ext_)
         
         self.dq_ = (
             self.alpha_ * self.dq_
@@ -193,10 +195,10 @@ class AdmittanceController(object):
         
 
         data_record = np.array(self.tau_model.tolist()+self.dq_.tolist() +self.q_.tolist())
-        # csv_save("/home/thy/ros2_ws/tau_model.csv", self.tau_model)
-        # csv_save("/home/thy/ros2_ws/tau_ext_raw.csv", self.tau_ext_raw)
-        # # csv_save("/home/thy/ros2_ws/f_ext_c.csv", self.f_ext_)
-        # csv_save("/home/thy/ros2_ws/data_record.csv", data_record)
+        csv_save("/home/thy/ros2_ws/tau_model.csv", self.tau_model)
+        csv_save("/home/thy/ros2_ws/tau_ext_raw.csv", self.tau_ext_raw)
+        # csv_save("/home/thy/ros2_ws/f_ext_c.csv", self.f_ext_)
+        csv_save("/home/thy/ros2_ws/command.csv", self.dq_)
 
         self.qd_last = copy.deepcopy(self.qd)
         self.q_last = copy.deepcopy(self.q_)

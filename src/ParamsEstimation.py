@@ -606,7 +606,7 @@ class Estimator(Node):
     
     def generate_opt_traj(self,Ff, sampling_rate, Rank=5, 
                           q_min=-2.0*np.ones(7), q_max =2.0*np.ones(7),
-                          q_vmin=-4.0*np.ones(7),q_vmax=4.0*np.ones(7),
+                          q_vmin=-6.0*np.ones(7),q_vmax=6.0*np.ones(7),
                           f_path = None, g_path=None):
 
         Pb, Pd, Kd =find_dyn_parm_deps(7,80,self.Ymat)

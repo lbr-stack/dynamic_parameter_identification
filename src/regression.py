@@ -463,13 +463,12 @@ class FourierSeries():
 
 
 
-class Estimator(Node):
+class Estimator():
     def __init__(self, node_name = "para_estimatior", dt_ = 5.0, N_ = 100) -> None:
-        super().__init__(node_name=node_name)
 
         self.dt_ = dt_
-        self.declare_parameter("model", "med7dock")
-        self.model_ = str(self.get_parameter("model").value)
+        # self.declare_parameter("model", "med7dock")
+        self.model_ = "med7dock" #str(self.get_parameter("model").value)
         path = os.path.join(
             get_package_share_directory("med7_dock_description"),
             "urdf",
