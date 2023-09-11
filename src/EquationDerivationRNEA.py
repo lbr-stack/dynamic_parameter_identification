@@ -73,8 +73,8 @@ class Estimator(Node):
         path = os.path.join(
             get_package_share_directory("lbr_description"),
             "urdf",
-            self.model_,
-            f"{self.model_}.urdf.xacro",
+            "med7",
+            "med7.urdf",
         )
 
         # self.lbr_command_timer_ = self.create_timer(self.dt_, self.timer_cb_regressor)
@@ -355,10 +355,24 @@ class Estimator(Node):
         path2 = os.path.join(
             get_package_share_directory("lbr_description"),
             "urdf",
-            self.model_,
+            "med7",
         )
+
+        # path = os.path.join(
+        #     get_package_share_directory("med7_dock_description"),
+        #     "urdf",
+        #     "med7dock.urdf.xacro",
+        # )
         print(path2)
+        # pb.setAdditionalSearchPath(path2)
+
+        # path3 = os.path.join(
+        #     get_package_share_directory("lbr_description")
+        # )
+
         pb.setAdditionalSearchPath(path2)
+        # pb.setAdditionalSearchPath(path3)
+
 
         gravz = -9.81
         pb.setGravity(0, 0, gravz)
@@ -373,9 +387,9 @@ class Estimator(Node):
         #     cameraTargetPosition=np.array([0.35, -0.2, 0.2]),
         # )
         # pb.configureDebugVisualizer(pb.COV_ENABLE_GUI, 0)
-
+        # print("path2 = ",path2)
         self.id = pb.loadURDF(
-            'med7.urdf',
+            "med7.urdf",
             basePosition=[0, 0, 0],
         )
         self.iter = 0.0
@@ -547,7 +561,7 @@ class Estimator(Node):
 
         # print("K = {0}".format(K))
         # print("beta = {0}".format(K @ self.PIvector(self.masses_np,self.massesCenter_np,self.Inertia_np)))
-        ttt = self.Ymat(q_np,qd_np,qdd_np) @Pb @ K @ self.PIvector(self.masses_np,self.massesCenter_np,self.Inertia_np)
+        ttt = self.Ymat(q_np,qd_np,qdd_np) @ K @ self.PIvector(self.masses_np,self.massesCenter_np,self.Inertia_np)
         print("error2 = {0}\n".format(tau_ext-ttt))
 
         q = cs.SX.sym('q', 7, 1)
