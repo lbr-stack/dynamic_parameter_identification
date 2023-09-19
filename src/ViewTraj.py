@@ -49,8 +49,10 @@ def view_states_in_one(measuements, N):
     ax.set_title('Exciting Trajectories')
     ax.set_xlabel('time (s)')
     ax.set_ylabel('Joint Position (rad)')
+    ax.grid()
 
-    ax.legend()
+
+    # ax.legend()
     # 显示图表
     plt.show()
 
@@ -75,6 +77,7 @@ def compare_traj(states1, states2, name="y (rad)"):
                                       label='raw_data')
         axs[int(i%4) , int(i/4)].set_xlabel('t (s)')
         axs[int(i%4) , 0].set_ylabel(name)
+        axs[int(i%4) , int(i/4)].grid()
         # if(i==6):
         #     axs[int(i%4) , int(i/4)].legend()
 
