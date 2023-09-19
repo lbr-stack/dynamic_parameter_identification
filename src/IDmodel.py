@@ -79,16 +79,10 @@ class TD_list_filter:
 
 
 def ExtractFromParamsCsv(path):
-        # path_pos = os.path.join(
-        #     get_package_share_directory("gravity_compensation"),
-        #     "test",
-        #     "measurements_with_ext_tau.csv",
-        # )
         params = []
         with open(path) as csv_file:
             csv_reader = csv.DictReader(csv_file)
             for row in csv_reader:
-                # print("111 = {0}".format(row.values()))
                 params = [float(x) for x in list(row.values())]
 
         return params
@@ -267,16 +261,12 @@ def DynamicLinearlization(dynamics_,Nb):
                     output_Icm = optas.jacobian(output2,Icm[k,l+3*j])
                     Y_line.append(output_Icm)
 
-            # sx_lst = optas.horzcat(*Y_seg)
             # Y_line
         sx_lst = optas.horzcat(*Y_line)
         Y.append(sx_lst)
-        # print("Y_line shape = {0}, {1}".format(Y_line[0].shape[0],Y_line[0].shape[1]))
-        # print("sx_lst shape = {0}, {1}".format(sx_lst.shape[0],sx_lst.shape[1]))
+
 
     Y_mat = optas.vertcat(*Y)
-
-
     Ymat = optas.Function('Dynamic_Ymat',[q,qd,qdd],[Y_mat])
 
     PI_a = []

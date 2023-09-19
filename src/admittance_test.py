@@ -1,54 +1,22 @@
 #!/usr/bin/python3
 import os
-
 import numpy as np
-np.set_printoptions(precision=3, suppress=True, linewidth=1000)
+# np.set_printoptions(precision=3, suppress=True, linewidth=1000)
 import rclpy
-from rclpy.executors import SingleThreadedExecutor, MultiThreadedExecutor
-import xacro
 from ament_index_python import get_package_share_directory
-
 from rclpy.node import Node
 from rclpy.duration import Duration
-
 from rclpy.qos import QoSProfile, ReliabilityPolicy
-from rclpy.callback_groups import MutuallyExclusiveCallbackGroup, ReentrantCallbackGroup
-
-from std_msgs.msg import Float64MultiArray
 from lbr_fri_msgs.msg import LBRCommand, LBRState
-
-import pathlib
-import csv
 import copy
 # OpTaS
 import optas
 from optas.spatialmath import *
-
-from scipy.spatial.transform import Rotation as Rot
-from geometry_msgs.msg import Pose
-import math
-import sys
-# sys.path.append(os.path.join(
-#             get_package_share_directory("lbr_fri_aruco_detector"),
-#             "..",
-#             "lib",
-#             "lbr_fri_aruco_detector"
-#         ))
-
 from IDmodel import RNEA_function,DynamicLinearlization,getJointParametersfromURDF,find_dyn_parm_deps,ExtractFromParamsCsv
-sys.path.append("/home/thy/ros2_ws/src/lbr_fri_aruco_detector/src")
-from utility_math import csv_save
-# import csv
 
-
-# ros2 launch lbr_bringup lbr_bringup.launch.py model:=med7 sim:=false controller_configurations_package:=lbr_velocity_controllers controller_configurations:=config/sample_config.yml controller:=lbr_velocity_controller 
-
-
-
-# import numpy as np
-# import optas
-
-# from lbr_fri_msgs.msg import LBRCommand, LBRState
+"""
+This presents an admittance controller for all directions of guiding
+"""
 
 
 class AdmittanceController(object):
@@ -62,8 +30,6 @@ class AdmittanceController(object):
         dx_gain: np.ndarray = np.array([0.3, 0.3, 0.3, 10.0, 10.0, 10.0]),
     ) -> None:
         self.lbr_command_ = LBRCommand()
-        # self.declare_parameter("model", "med7dock")
-        # print("robot_description",robot_description)
 
         robot = optas.RobotModel(xacro_filename=robot_description)
         J = robot.get_geometric_jacobian_function(
@@ -87,13 +53,6 @@ class AdmittanceController(object):
         self.qd_last = np.array([0.0]*7)
         self.qd = np.array([0.0]*7)
 
-        # self.model_ = str(self.get_parameter("model").value)
-
-        # path = os.path.join(
-        #     get_package_share_directory("med7_dock_description"),
-        #     "urdf",
-        #     f"{self.model_}.urdf.xacro",
-        # )
 
         self.robot = robot
         Nb, xyzs, rpys, axes = getJointParametersfromURDF(self.robot)
@@ -138,12 +97,6 @@ class AdmittanceController(object):
         self.qd = (self.q_-self.q_last)/0.01
         qdd = (self.qd-self.qd_last)/0.01
 
-        # print("q = ",self.q_)
-        # print("self.q_", self.q_)
-        # print("self.tau_ext_raw", self.tau_ext_raw)
-
-
-        # self.tau_ext_ =  self.tau_ext_raw 
         self.tau_model = (self.Ymat(q.tolist(),
                         self.qd.tolist(),
                         qdd.tolist())@self.Pb @  self.params[:self.pa_size] + 
@@ -182,11 +135,6 @@ class AdmittanceController(object):
             + (1 - self.alpha_) * self.dq_gain_ @ self.jacobian_inv_ @ self.f_ext_
         )
 
-
-
-
-        # self.dq_ = 50*np.ones(7)
-
         self.lbr_command_.joint_position = (
             np.array(lbr_state.measured_joint_position.tolist())
             + lbr_state.sample_time * self.dq_
@@ -195,10 +143,13 @@ class AdmittanceController(object):
         
 
         data_record = np.array(self.tau_model.tolist()+self.dq_.tolist() +self.q_.tolist())
-        csv_save("/home/thy/ros2_ws/tau_model.csv", self.tau_model)
-        csv_save("/home/thy/ros2_ws/tau_ext_raw.csv", self.tau_ext_raw)
-        # csv_save("/home/thy/ros2_ws/f_ext_c.csv", self.f_ext_)
-        csv_save("/home/thy/ros2_ws/command.csv", self.dq_)
+
+        """ 
+        The users could uncomment the lines to record data in your PC.
+        """
+        # csv_save("/home/thy/ros2_ws/tau_model.csv", self.tau_model)
+        # csv_save("/home/thy/ros2_ws/tau_ext_raw.csv", self.tau_ext_raw)
+        # csv_save("/home/thy/ros2_ws/command.csv", self.dq_)
 
         self.qd_last = copy.deepcopy(self.qd)
         self.q_last = copy.deepcopy(self.q_)

@@ -26,15 +26,12 @@ find_package(ament_cmake REQUIRED)
 
 install(
   PROGRAMS
-    src/EquationDerivation.py
-    src/EquationDerivationRNEA.py
-    src/ParamsEstimation.py
+    src/TrajGeneration.py
     src/regression.py
     src/IDmodel.py
     src/CollisionCheck.py
     src/admittance_test.py
     src/convexhallExtraction.py
-    src/ViewTraj.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
