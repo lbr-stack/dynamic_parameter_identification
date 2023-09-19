@@ -310,11 +310,7 @@ def find_eigen_value(dof, parm_num, regressor_func,shape):
         A_mat = A_mat+ regressor_func(a,b)
 
     U, s, V = np.linalg.svd(A_mat)
-        # Z[i * dof: i * dof + dof, :] = np.matrix(
-        #     regressor_func(q, dq, ddq)).reshape(dof, parm_num)
 
-    # R1_diag = np.linalg.qr(Z, mode='r').diagonal().round(round)
-    
 
     return U,V
 
