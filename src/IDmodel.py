@@ -465,24 +465,9 @@ def main():
             "DynamicParameters.csv",
         )
     params = ExtractFromParamsCsv(path_pos)
-    # print("Y",Ymat(q.tolist(), 
-    #                 filter(qd.tolist())[0], 
-    #                 filter(qd.tolist())[1]  # directly compute qdd here.
-    #                 ).shape)
-    # print("K ",K.shape)
-    # print("Pb ",Pb.shape)
-    # print("masses_np",masses_np.shape)
-    real_pam=PIvector(masses_np, massesCenter_np, Inertia_np)
 
-    # print("real_pam ",real_pam)
-    # calculate the tau_estimation
-    # tau_est = (Ymat(q.tolist(), 
-    #                 filter(qd.tolist())[0], 
-    #                 filter(qd.tolist())[1]  # directly compute qdd here.
-    #                 ) @ Pb @K @  params[:pa_size] + 
-    #             np.diag(np.sign(qd)) @ params[pa_size:pa_size+7]+ 
-    #             np.diag(qdd) @ params[pa_size+7:])
-    
+    real_pam=PIvector(masses_np, massesCenter_np, Inertia_np)
+   
     tau_est = (Ymat(q.tolist(), 
                     filter(qd.tolist())[0], 
                     filter(qd.tolist())[1]  # directly compute qdd here.
@@ -491,12 +476,6 @@ def main():
                 np.diag(qdd) @ params[pa_size+7:])
 
     
-    # tau_est = Ymat(q.tolist(), 
-    #                 filter(qd.tolist())[0], 
-    #                 filter(qd.tolist())[1]  # directly compute qdd here.
-    #                 ) @ Pb @  real_pam[:pa_size]
-    #             # np.diag(np.sign(qd)) @ real_pam[pa_size:pa_size+7]+ 
-    #             # np.diag(qdd) @ real_pam[pa_size+7:])
     
     print(" The estimated torque  tau_est = {0}".format(tau_est))
 
