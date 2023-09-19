@@ -4,8 +4,10 @@ from ament_index_python import get_package_share_directory
 import numpy as np
 from sklearn.mixture import GaussianMixture
 
+"""
+From STL extracting convex halls using clustering and GMMs
+"""
 
-# 从 STL 文件加载 3D 模型
 def get_convex_hull(path):
     mesh = o3d.io.read_triangle_mesh(path)
     convex_hull,convex_hull_vertex_indices = mesh.compute_convex_hull()
@@ -39,11 +41,7 @@ def main():
             )
 
     mesh = o3d.io.read_triangle_mesh(path_pos)
-
-    # 提取 3D 凸包
     convex_hull,convex_hull_vertex_indices = mesh.compute_convex_hull()
-
-    # 可视化原始模型和提取的凸包
     ps = np.asarray(convex_hull.vertices)
 
 
@@ -62,7 +60,6 @@ def main():
     print("means = gmm.means_",gmm.means_)
 
 
-    # print("")
     point_cloud_o3d = o3d.geometry.PointCloud()
     point_cloud_o3d.points = o3d.utility.Vector3dVector(ps)
 

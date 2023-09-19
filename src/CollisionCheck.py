@@ -6,9 +6,12 @@ from optas.spatialmath import *
 
 from ament_index_python import get_package_share_directory
 import os
-import math
 
-from ParamsEstimation import getJointParametersfromURDF
+from gravity_compensation.src.TrajGeneration import getJointParametersfromURDF
+
+"""
+This presents a collision check demo. Needs med7_dock_description
+"""
 
 
 def getConstraintsinJointSpace(robot,point_coord = [0.]*3,Nb=7, base_link="lbr_link_3", base_joint_name="lbr_A3", ee_link="lbr_link_ee"):

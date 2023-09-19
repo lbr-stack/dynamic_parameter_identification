@@ -79,16 +79,10 @@ class TD_list_filter:
 
 
 def ExtractFromParamsCsv(path):
-        # path_pos = os.path.join(
-        #     get_package_share_directory("gravity_compensation"),
-        #     "test",
-        #     "measurements_with_ext_tau.csv",
-        # )
         params = []
         with open(path) as csv_file:
             csv_reader = csv.DictReader(csv_file)
             for row in csv_reader:
-                # print("111 = {0}".format(row.values()))
                 params = [float(x) for x in list(row.values())]
 
         return params
@@ -267,16 +261,12 @@ def DynamicLinearlization(dynamics_,Nb):
                     output_Icm = optas.jacobian(output2,Icm[k,l+3*j])
                     Y_line.append(output_Icm)
 
-            # sx_lst = optas.horzcat(*Y_seg)
             # Y_line
         sx_lst = optas.horzcat(*Y_line)
         Y.append(sx_lst)
-        # print("Y_line shape = {0}, {1}".format(Y_line[0].shape[0],Y_line[0].shape[1]))
-        # print("sx_lst shape = {0}, {1}".format(sx_lst.shape[0],sx_lst.shape[1]))
+
 
     Y_mat = optas.vertcat(*Y)
-
-
     Ymat = optas.Function('Dynamic_Ymat',[q,qd,qdd],[Y_mat])
 
     PI_a = []
@@ -320,11 +310,7 @@ def find_eigen_value(dof, parm_num, regressor_func,shape):
         A_mat = A_mat+ regressor_func(a,b)
 
     U, s, V = np.linalg.svd(A_mat)
-        # Z[i * dof: i * dof + dof, :] = np.matrix(
-        #     regressor_func(q, dq, ddq)).reshape(dof, parm_num)
 
-    # R1_diag = np.linalg.qr(Z, mode='r').diagonal().round(round)
-    
 
     return U,V
 
@@ -465,24 +451,9 @@ def main():
             "DynamicParameters.csv",
         )
     params = ExtractFromParamsCsv(path_pos)
-    # print("Y",Ymat(q.tolist(), 
-    #                 filter(qd.tolist())[0], 
-    #                 filter(qd.tolist())[1]  # directly compute qdd here.
-    #                 ).shape)
-    # print("K ",K.shape)
-    # print("Pb ",Pb.shape)
-    # print("masses_np",masses_np.shape)
-    real_pam=PIvector(masses_np, massesCenter_np, Inertia_np)
 
-    # print("real_pam ",real_pam)
-    # calculate the tau_estimation
-    # tau_est = (Ymat(q.tolist(), 
-    #                 filter(qd.tolist())[0], 
-    #                 filter(qd.tolist())[1]  # directly compute qdd here.
-    #                 ) @ Pb @K @  params[:pa_size] + 
-    #             np.diag(np.sign(qd)) @ params[pa_size:pa_size+7]+ 
-    #             np.diag(qdd) @ params[pa_size+7:])
-    
+    real_pam=PIvector(masses_np, massesCenter_np, Inertia_np)
+   
     tau_est = (Ymat(q.tolist(), 
                     filter(qd.tolist())[0], 
                     filter(qd.tolist())[1]  # directly compute qdd here.
@@ -491,12 +462,6 @@ def main():
                 np.diag(qdd) @ params[pa_size+7:])
 
     
-    # tau_est = Ymat(q.tolist(), 
-    #                 filter(qd.tolist())[0], 
-    #                 filter(qd.tolist())[1]  # directly compute qdd here.
-    #                 ) @ Pb @  real_pam[:pa_size]
-    #             # np.diag(np.sign(qd)) @ real_pam[pa_size:pa_size+7]+ 
-    #             # np.diag(qdd) @ real_pam[pa_size+7:])
     
     print(" The estimated torque  tau_est = {0}".format(tau_est))
 
