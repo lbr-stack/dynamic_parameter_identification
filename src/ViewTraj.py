@@ -143,7 +143,8 @@ def quaternion_to_rotation_matrix(q):
 # sys.path.append('/home/thy/ros2_ws/src/lbr_fri_ros2_stack/lbr_demos/lbr_fri_ros2_advanced_python_demos/lbr_fri_ros2_advanced_python_demos')
 # from admittance_control_Hybrid import quaternion_to_rotation_matrix
 # 读取CSV文件
-#bt和br都是世界坐标系下的，因此他们不相等其实并不影响。因为姿态并非严格为100
+
+
 # id_str = "51"
 # filename = id_str+'/pose_bt.csv'
 # filename2 = id_str+'/pose_br.csv'/home/thy/target traj
