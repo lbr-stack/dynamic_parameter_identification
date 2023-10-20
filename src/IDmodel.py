@@ -97,8 +97,8 @@ def RNEA_function(Nb,Nk,rpys,xyzs,axes):
     
     om0 = cs.DM([0.0,0.0,0.0])
     om0D = cs.DM([0.0,0.0,0.0])
-    gravity_para = cs.DM([0.0, 0.0, -9.81])
-    # gravity_para = cs.DM([4.905, 0.0, -8.496])
+    # gravity_para = cs.DM([0.0, 0.0, -9.81])
+    gravity_para = cs.DM([4.905, 0.0, -8.496])
 
     """
     The definination of joint position from joint0 to joint(Nb-1)
