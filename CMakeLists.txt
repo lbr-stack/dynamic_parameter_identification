@@ -27,6 +27,8 @@ find_package(ament_cmake REQUIRED)
 install(
   PROGRAMS
     src/TrajGeneration.py
+    src/trajsimulation.py
+    src/ground_truth_gen_sim.py
     src/regression.py
     src/IDmodel.py
     src/CollisionCheck.py

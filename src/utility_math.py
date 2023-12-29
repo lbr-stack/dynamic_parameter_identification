@@ -1,6 +1,7 @@
 import math
 import numpy as np
 import csv
+import os
 
 
 def sign(x):
@@ -90,6 +91,8 @@ def quaternion_normalize(q):
 
 
 def csv_save(path, vector):
+    if not os.path.exists(path):
+        os.makedirs(path)
     with open(path,'a', newline='') as file:
         writer =csv.writer(file)
         writer.writerow(vector)

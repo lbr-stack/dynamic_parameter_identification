@@ -87,7 +87,7 @@ def ExtractFromParamsCsv(path):
 
         return params
 
-def RNEA_function(Nb,Nk,rpys,xyzs,axes):
+def RNEA_function(Nb,Nk,rpys,xyzs,axes,gravity_para=cs.DM([4.905, 0.0, -8.496])):
     # 2. RNEA
     Nf = Nb+Nk
     """
@@ -98,7 +98,7 @@ def RNEA_function(Nb,Nk,rpys,xyzs,axes):
     om0 = cs.DM([0.0,0.0,0.0])
     om0D = cs.DM([0.0,0.0,0.0])
     # gravity_para = cs.DM([0.0, 0.0, -9.81])
-    gravity_para = cs.DM([4.905, 0.0, -8.496])
+    # gravity_para = cs.DM([4.905, 0.0, -8.496])
 
     """
     The definination of joint position from joint0 to joint(Nb-1)
@@ -314,7 +314,7 @@ def find_eigen_value(dof, parm_num, regressor_func,shape):
 
     return U,V
 
-def getJointParametersfromURDF(robot, ee_link="lbr_link_ee"):
+def getJointParametersfromURDF(robot, ee_link="link_ee"):
     robot_urdf = robot.urdf
     root = robot_urdf.get_root()
     # ee_link = "lbr_link_ee"
