@@ -166,6 +166,7 @@ class Estimator():
         
         # filter_list = [TD_2order(T=0.01) for i in range(7)]
         # filter_vector = TD_list_filter(T=0.01)
+        qdd_np = np.array([0.0]*7)
         for k in range(0,len(positions),1):
             # print("q_np = {0}".format(q_np))
             # q_np = np.random.uniform(-1.5, 1.5, size=7)
@@ -176,13 +177,13 @@ class Estimator():
 
             qdlast_np = [velocities[k-1][i] for i in Order]
             
-            qdd_np = (np.array(qd_np)-np.array(qdlast_np))/0.01
-            qdd_np = qdd_np.tolist()
+            qdd_np = 0.3*(np.array(qd_np)-np.array(qdlast_np))/0.01 + 0.7*qdd_np
+            qdd_np_list = qdd_np.tolist()
     
 
             Y_temp = self.Ymat(q_np,
                                qd_np,
-                               qdd_np) @Pb 
+                               qdd_np_list) @Pb 
             fri_ = np.diag([float(np.sign(item)) for item in qd_np])
             fri_ = np.hstack((fri_,  np.diag(qd_np)))
             # fri_ = [[np.sign(v), v] for v in qd_np]
@@ -210,8 +211,8 @@ class Estimator():
 
    
 
-        # Y = Y_r #cs.DM(np.hstack((Y_r, Y_fri1)))
-        Y = cs.DM(np.hstack((Y_r, Y_fri1)))
+        Y = Y_r #cs.DM(np.hstack((Y_r, Y_fri1)))
+        # Y = cs.DM(np.hstack((Y_r, Y_fri1)))
         estimate_pam = np.linalg.inv(Y.T @ Y) @ Y.T @ taus1
  
         # print("self.masses_np",self.masses_np.shape)

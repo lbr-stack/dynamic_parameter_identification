@@ -185,7 +185,7 @@ class TrajGeneration(Node):
     
     def generate_opt_traj_Link(self,Ff, sampling_rate, Rank=5, 
                           q_min=-2.0*np.ones(7), q_max =2.0*np.ones(7),
-                          q_vmin=-4.0*np.ones(7),q_vmax=4.0*np.ones(7),
+                          q_vmin=-8.0*np.ones(7),q_vmax=8.0*np.ones(7),
                           f_path = None, g_path=None,bias=[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]):
 
         Pb, Pd, Kd =find_dyn_parm_deps(7,80,self.Ymat)
@@ -414,8 +414,8 @@ class TrajGeneration(Node):
         return x_split1.full(),x_split2.full(),fc
     
     def get_optimization_problem(self,Ff, sampling_rate, Rank=5, 
-                          q_min=-2.0*np.ones(7), q_max =2.0*np.ones(7),
-                          q_vmin=-4.0*np.ones(7),q_vmax=4.0*np.ones(7),
+                          q_min=-3.0*np.ones(7), q_max =3.0*np.ones(7),
+                          q_vmin=-6.0*np.ones(7),q_vmax=6.0*np.ones(7),
                           f_path = None, g_path=None,bias=[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]):
 
         Pb, Pd, Kd =find_dyn_parm_deps(7,80,self.Ymat)
@@ -558,7 +558,7 @@ class TrajGeneration(Node):
             ubg1.append(0.0)
             ubg2.append(0.0)
             ubg3.append(0.0)
-            ubg4.append(q_max[i])
+            ubg4.append(Ff* math.pi* 2.0  *q_max[i])
             ubg5.append(q_vmax[i])
 
         g = cs.vertcat(*(a_eq1+  a_eq2+  b_eq1+  ab_sq_ineq1+ ab_sq_ineq2 + ab_sq_ineq3 +pfun_list))
@@ -620,6 +620,14 @@ class TrajGeneration(Node):
         x_sample_temp = eps* np.random.random (size= (1,70))
 
         return self.find_optimal_point_with_start(S,lbg, ubg , Rank,x_sample_temp)
+    
+
+    def trajectory_with_random(self,Rank=5):
+        x_sample_temp = 0.3* np.random.random (size= (1,70))
+        x_split1,x_split2 = cs.vertsplit(cs.reshape(x_sample_temp,(2*Rank,7)),Rank)
+        return x_split1.full(),x_split2.full() 
+
+
 
         # for iter in range(G_max):
         #     for num in range(reject_sample):
@@ -660,7 +668,7 @@ class TrajGeneration(Node):
         # x_split1,x_split2 = cs.vertsplit(cs.reshape(_x0_best,(2*Rank,7)),Rank)
 
         # print("sol = {0}".format(_x0_best))
-        return x_split1.full(),x_split2.full(),fc
+        # return x_split1.full(),x_split2.full(),fc
         
     
     def generate_opt_traj(self,Ff, sampling_rate, Rank=5, 

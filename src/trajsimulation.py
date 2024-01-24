@@ -29,6 +29,7 @@ class TrajectoryConductionSim(Node):
         #         )
         # print("RUn to here")
         p.connect(p.DIRECT)
+        # p.connect(p.GUI)
         p.setTimeStep(0.01)
         p.setGravity(*gravity_vector)
         for path in resource_list:

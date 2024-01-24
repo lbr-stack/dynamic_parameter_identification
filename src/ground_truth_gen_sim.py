@@ -71,7 +71,7 @@ def main(args=None):
     paraEstimator = Estimator(gravity_vec=gravity_vec)
 
     prefix = "/home/thy/learningDynModel/"
-    for i in range(10,100,1):
+    for i in range(200,300,1):
 
         a,b = traj_instance.find_optimal_point_with_randomstart(S,lbg,ubg, Rank=5)
         print("a = {0} \n b = {1}".format(a,b))

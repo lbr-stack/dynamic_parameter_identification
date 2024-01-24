@@ -34,11 +34,13 @@ install(
     src/CollisionCheck.py
     src/admittance_test.py
     src/convexhallExtraction.py
+    src/test_model.py
+    src/MetaGen.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
 install(
-  DIRECTORY src/test
+  DIRECTORY src/test src/resources
   DESTINATION share/${PROJECT_NAME}
 )
 
