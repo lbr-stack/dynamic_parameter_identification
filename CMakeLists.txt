@@ -27,16 +27,20 @@ find_package(ament_cmake REQUIRED)
 install(
   PROGRAMS
     src/TrajGeneration.py
+    src/trajsimulation.py
+    src/ground_truth_gen_sim.py
     src/regression.py
     src/IDmodel.py
     src/CollisionCheck.py
     src/admittance_test.py
     src/convexhallExtraction.py
+    src/test_model.py
+    src/MetaGen.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
 install(
-  DIRECTORY src/test
+  DIRECTORY src/test src/resources urdf
   DESTINATION share/${PROJECT_NAME}
 )
 

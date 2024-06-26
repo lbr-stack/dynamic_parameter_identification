@@ -18,6 +18,8 @@
   <exec_depend>lbr_fri_msgs</exec_depend>
   <exec_depend>rclpy</exec_depend>
   <exec_depend>kdl_parser</exec_depend>
+  <exec_depend>xacro</exec_depend>
+
 
 
   <export>

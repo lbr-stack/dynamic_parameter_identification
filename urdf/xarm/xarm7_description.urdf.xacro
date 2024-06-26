@@ -1,0 +1,352 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://ros.org/wiki/xacro">
+
+    <xacro:property name="PI" value="3.1415926535897931" />
+    <xacro:property name="joint_damping" value="10.0" />
+    <xacro:property name="joint_friction" value="0.1" />
+
+    <xacro:property name="joint1_lower_limit" value="${-2.0*PI}" />
+    <xacro:property name="joint2_lower_limit" value="-2.059" />
+    <xacro:property name="joint3_lower_limit" value="${-2.0*PI}" />
+    <xacro:property name="joint4_lower_limit" value="-0.19198" />
+    <xacro:property name="joint5_lower_limit" value="${-2.0*PI}" />
+    <xacro:property name="joint6_lower_limit" value="-1.69297" />
+    <xacro:property name="joint7_lower_limit" value="${-2.0*PI}" />
+
+
+    <xacro:property name="joint1_upper_limit" value="${2.0*PI}" />
+    <xacro:property name="joint2_upper_limit" value="2.0944" />
+    <xacro:property name="joint3_upper_limit" value="${2.0*PI}" />
+    <xacro:property name="joint4_upper_limit" value="3.927" />
+    <xacro:property name="joint5_upper_limit" value="${2.0*PI}" />
+    <xacro:property name="joint6_upper_limit" value="${PI}" />
+    <xacro:property name="joint7_upper_limit" value="${2.0*PI}" />
+
+    <xacro:property name="joint_0_velocity_limit" value="98" />
+    <xacro:property name="joint_1_velocity_limit" value="98" />
+    <xacro:property name="joint_2_velocity_limit" value="100" />
+    <xacro:property name="joint_3_velocity_limit" value="130" />
+    <xacro:property name="joint_4_velocity_limit" value="140" />
+    <xacro:property name="joint_5_velocity_limit" value="180" />
+    <xacro:property name="joint_6_velocity_limit" value="180" />
+
+
+
+  <xacro:macro name="xarm7_urdf" params="robot_name:=^|xarm sim:=^|true">
+
+    <material name="white">
+      <color rgba="1.0 1.0 1.0 1.0"/> <!-- White -->
+    </material>
+
+
+    <link name="link_base">
+      <inertial>
+        <origin xyz="-0.021131 -0.0016302 0.056488" rpy="0 0 0" />
+        <mass value="0.88556" />
+        <inertia
+          ixx="0.0030595" ixy="0.00012259" ixz="-0.00062705"
+          iyy="0.0037783" iyz="0.00027023" izz="0.0020125" />
+      </inertial>
+      <visual>
+          <origin rpy="0 0 0" xyz="0 0 0" />
+          <geometry>
+              <mesh filename="package://xarm_description/meshes/xarm7/visual/link_base.stl" />
+          </geometry>
+          <material name="white"/>
+      </visual>
+      <collision>
+          <origin rpy="0 0 0" xyz="0 0 0" />
+          <geometry>
+              <mesh filename="package://xarm_description/meshes/xarm7/visual/link_base.stl" />
+          </geometry>
+      </collision>
+    </link>
+
+    <link name="link_1">
+
+       <inertial>
+        <origin xyz="0.00013 0.0301 -0.012" rpy="0 0 0" />
+        <mass value="2.459" />
+        <inertia
+          ixx="0.005795" ixy="1.078e-05" ixz="2.63e-05"
+          iyy="0.004969" iyz="-0.000911" izz="0.003428" />
+      </inertial>
+      <visual>
+          <origin rpy="0 0 0" xyz="0 0 0" />
+          <geometry>
+              <mesh filename="package://xarm_description/meshes/xarm7/visual/link1.stl" />
+          </geometry>
+          <material name="white"/>
+        </visual>
+      <collision>
+          <origin rpy="0 0 0" xyz="0 0 0" />
+          <geometry>
+              <mesh filename="package://xarm_description/meshes/xarm7/visual/link1.stl" />
+          </geometry>
+      </collision>
+    </link>
+
+
+    <joint name="A1" type="revolute">
+      <origin xyz="0 0 0.267" rpy="0 0 0" />
+      <!-- <xacro:common_joint_origin joint_kinematic_params="${kinematics_params['joint1']}" /> -->
+      <parent link="link_base" />
+      <child link="link_1" />
+      <axis xyz="0 0 1" />
+      <limit
+        lower="${joint1_lower_limit}"
+        upper="${joint1_upper_limit}"
+        effort="50"
+        velocity="3.14" />
+      <dynamics damping="10" friction="1" />
+    </joint>
+
+    <link name="link_2">
+      <inertial>
+        <origin xyz="0.0002 -0.12964 0.01692" rpy="0 0 0" />
+        <mass value="1.916" />
+        <inertia
+          ixx="0.0097184" ixy="1.0e-06" ixz="4.83e-06"
+          iyy="0.0038705" iyz="-0.0032" izz="0.007672145" />
+      </inertial>
+      <visual>
+          <origin rpy="0 0 0" xyz="0 0 0" />
+          <geometry>
+              <mesh filename="package://xarm_description/meshes/xarm7/visual/link2.stl" />
+          </geometry>
+          <material name="white"/>
+        </visual>
+      <collision>
+          <origin rpy="0 0 0" xyz="0 0 0" />
+          <geometry>
+              <mesh filename="package://xarm_description/meshes/xarm7/visual/link2.stl" />
+          </geometry>
+      </collision>
+    </link>
+
+    <joint name="A2" type="revolute">
+      <origin xyz="0 0 0" rpy="-1.5708 0 0" />
+      <!-- <xacro:common_joint_origin joint_kinematic_params="${kinematics_params['joint2']}" /> -->
+      <parent link="link_1" />
+      <child link="link_2" />
+      <axis xyz="0 0 1" />
+      <limit
+        lower="${joint2_lower_limit}"
+        upper="${joint2_upper_limit}"
+        effort="50"
+        velocity="3.14" />
+      <dynamics damping="10" friction="1" />
+    </joint>
+    
+    <link name="link_3">
+      <inertial>
+        <origin xyz="0.04676 -0.02526 -0.00746" rpy="0 0 0" />
+        <mass value="1.6854" />
+        <inertia
+          ixx="0.00315878" ixy="0.00031443" ixz="-0.00058658"
+          iyy="0.002682" iyz="0.0003469" izz="0.0027105" />
+      </inertial>
+      <visual>
+          <origin rpy="0 0 0" xyz="0 0 0" />
+          <geometry>
+              <mesh filename="package://xarm_description/meshes/xarm7/visual/link3.stl" />
+          </geometry>
+          <material name="white"/>
+        </visual>
+      <collision>
+          <origin rpy="0 0 0" xyz="0 0 0" />
+          <geometry>
+              <mesh filename="package://xarm_description/meshes/xarm7/visual/link3.stl" />
+          </geometry>
+      </collision>
+    </link>
+
+    <joint name="A3" type="revolute">
+      <origin xyz="0 -0.293 0" rpy="1.5708 0 0" />
+      <!-- <xacro:common_joint_origin joint_kinematic_params="${kinematics_params['joint3']}" /> -->
+      <parent link="link_2" />
+      <child link="link_3" />
+      <axis xyz="0 0 1" />
+      <limit
+        lower="${joint3_lower_limit}"
+        upper="${joint3_upper_limit}"
+        effort="30"
+        velocity="3.14" />
+      <dynamics damping="5" friction="1" />
+    </joint>
+
+
+    <link name="link_4">
+     <inertial>
+        <origin xyz="0.07066 -0.11664 0.0117" rpy="0 0 0" />
+        <mass value="1.774" />
+        <inertia
+          ixx="0.005967" ixy="0.00138232" ixz="0.00088544"
+          iyy="0.00363897" iyz="-0.0017806" izz="0.005509226" />
+      </inertial>
+      <visual>
+          <origin rpy="0 0 0" xyz="0 0 0" />
+          <geometry>
+              <mesh filename="package://xarm_description/meshes/xarm7/visual/link4.stl" />
+          </geometry>
+          <material name="white"/>
+        </visual>
+      <collision>
+          <origin rpy="0 0 0" xyz="0 0 0" />
+          <geometry>
+              <mesh filename="package://xarm_description/meshes/xarm7/visual/link4.stl" />
+          </geometry>
+      </collision>
+    </link>
+
+    <joint name="A4" type="revolute">
+      <origin xyz="0.0525 0 0" rpy="1.5708 0 0" />
+      <!-- <xacro:common_joint_origin joint_kinematic_params="${kinematics_params['joint4']}" /> -->
+      <parent link="link_3" />
+      <child link="link_4" />
+      <axis xyz="0 0 1" />
+      <limit
+        lower="${joint4_lower_limit}"
+        upper="${joint4_upper_limit}"
+        effort="30"
+        velocity="3.14" />
+      <dynamics damping="5" friction="1" />
+    </joint>
+
+
+    <link name="link_5">
+     <inertial>
+        <origin xyz="-0.00031 0.01558 -0.0253" rpy="0 0 0" />
+        <mass value="1.357" />
+        <inertia
+          ixx="0.005967" ixy="1.5312e-05" ixz="6.7e-07"
+          iyy="0.0050232" iyz="-0.00020544" izz="0.00138734" />
+      </inertial>
+      <visual>
+          <origin rpy="0 0 0" xyz="0 0 0" />
+          <geometry>
+              <mesh filename="package://xarm_description/meshes/xarm7/visual/link5.stl" />
+          </geometry>
+          <material name="white"/>
+        </visual>
+      <collision>
+          <origin rpy="0 0 0" xyz="0 0 0" />
+          <geometry>
+              <mesh filename="package://xarm_description/meshes/xarm7/visual/link5.stl" />
+          </geometry>
+      </collision>
+    </link>
+
+
+    <joint name="A5" type="revolute">
+      <origin xyz="0.0775 -0.3425 0" rpy="1.5708 0 0" />
+      <!-- <xacro:common_joint_origin joint_kinematic_params="${kinematics_params['joint5']}" /> -->
+      <parent link="link_4" />
+      <child link="link_5" />
+      <axis xyz="0 0 1" />
+      <limit
+        lower="${joint5_lower_limit}"
+        upper="${joint5_upper_limit}"
+        effort="30"
+        velocity="3.14" />
+      <dynamics damping="5" friction="1" />
+    </joint>
+
+
+    <link name="link_6">
+      <inertial>
+        <origin xyz="0.065 0.03336 0.02131" rpy="0 0 0" />
+        <mass value="1.362" />
+        <inertia
+          ixx="0.0015057" ixy="-0.000496735" ixz="0.00029968"
+          iyy="0.0019297" iyz="0.00015" izz="0.0024" />
+      </inertial>
+      <visual>
+          <origin rpy="0 0 0" xyz="0 0 0" />
+          <geometry>
+              <mesh filename="package://xarm_description/meshes/xarm7/visual/link6.stl" />
+          </geometry>
+          <material name="white"/>
+        </visual>
+      <collision>
+          <origin rpy="0 0 0" xyz="0 0 0" />
+          <geometry>
+              <mesh filename="package://xarm_description/meshes/xarm7/visual/link6.stl" />
+          </geometry>
+      </collision>
+    </link>
+
+
+    <joint name="A6" type="revolute">
+      <origin xyz="0 0 0" rpy="1.5708 0 0" />
+      <!-- <xacro:common_joint_origin joint_kinematic_params="${kinematics_params['joint6']}" /> -->
+      <parent link="link_5" />
+      <child link="link_6" />
+      <axis xyz="0 0 1" />
+      <limit
+        lower="${joint6_lower_limit}"
+        upper="${joint6_upper_limit}"
+        effort="20"
+        velocity="3.14" />
+      <dynamics damping="2" friction="1" />
+    </joint>
+
+
+    <link name="link_7">
+      <inertial>
+        <origin xyz="0 -0.00677 -0.01098" rpy="0 0 0" />
+        <mass value="0.17" />
+        <inertia
+          ixx="9.3e-05" ixy="-0.0" ixz="-0.0"
+          iyy="5.87e-05" iyz="-3.6e-06" izz="0.000132" />
+      </inertial>
+      <visual>
+          <origin rpy="0 0 0" xyz="0 0 0" />
+          <geometry>
+              <mesh filename="package://xarm_description/meshes/xarm7/visual/link7.stl" />
+          </geometry>
+          <material name="white"/>
+        </visual>
+      <collision>
+          <origin rpy="0 0 0" xyz="0 0 0" />
+          <geometry>
+              <mesh filename="package://xarm_description/meshes/xarm7/visual/link7.stl" />
+          </geometry>
+      </collision>
+    </link>
+
+
+    <joint name="A7" type="revolute">
+      <origin xyz="0.076 0.097 0" rpy="-1.5708 0 0" />
+      <!-- <xacro:common_joint_origin joint_kinematic_params="${kinematics_params['joint7']}" /> -->
+      <parent link="link_6" />
+      <child link="link_7" />
+      <axis xyz="0 0 1" />
+      <limit
+        lower="${joint7_lower_limit}"
+        upper="${joint7_upper_limit}"
+        effort="20"
+        velocity="3.14" />
+      <dynamics damping="2" friction="1" />
+    </joint>
+
+    <link name="link_ee" />
+    <!-- <link name="link_ee">
+      <inertial>
+        <origin xyz="0 -0.00677 -0.01098" rpy="0 0 0" />
+        <mass value="0.17" />
+        <inertia
+          ixx="9.3e-05" ixy="-0.0" ixz="-0.0"
+          iyy="5.87e-05" iyz="-3.6e-06" izz="0.001132" />
+      </inertial>
+    </link> -->
+
+
+    <joint name="joint_eef" type="fixed">
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <parent link="link_7" />
+      <child link="link_ee" />
+    </joint>
+  
+  </xacro:macro>
+</robot>
