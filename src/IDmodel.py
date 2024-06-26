@@ -320,6 +320,8 @@ def getJointParametersfromURDF(robot, ee_link="link_ee"):
     # ee_link = "lbr_link_ee"
     xyzs, rpys, axes = [], [], []
 
+    print("link_names = ",robot.link_names)
+
 
     joints_list = robot_urdf.get_chain(root, ee_link, links=False)
 

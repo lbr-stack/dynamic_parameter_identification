@@ -77,7 +77,7 @@ def main(args=None):
 
     prefix = "/home/thy/learningDynModel/meta/"
 
-    for i in range(300,305,1):
+    for i in range(1,300,1):
         a,b = traj_instance.find_optimal_point_with_randomstart(S,lbg,ubg, Rank=5)
         print("a = {0} \n b = {1}".format(a,b))
         eigenvalues, eigenvectors = np.linalg.eig(fc(a,b))

@@ -26,6 +26,13 @@ import random
 
 from IDmodel import TD_2order, find_dyn_parm_deps, RNEA_function,DynamicLinearlization,getJointParametersfromURDF
 
+def contains_nan(x):
+    for i,element in enumerate(np.array(x).flatten()):
+        if np.isnan(element):
+            print("NAN occured on ", i)
+            return True
+    return False
+
 
 def getConstraintsinJointSpace(robot,point_coord = [0.]*3,Nb=7, base_link="link_3", base_joint_name="A3", ee_link="link_ee"):
     q = cs.SX.sym('q', Nb, 1)
@@ -51,8 +58,13 @@ def getConstraintsinJointSpace(robot,point_coord = [0.]*3,Nb=7, base_link="link_
     z= p[2]
     c = xyz[2]
     c = c/2
+
+    if(c==0):
+        c= 0.2
     a = 0.15
     b = 0.15
+
+    print("c = ",c)
     EpVF = x*x/(a*a) + y*y/(b*b) + (z-c)*(z-c)/(c*c)-1
 
     # constraints = optas.
@@ -94,13 +106,18 @@ class FourierSeries():
                 - b[l,i]/wl * np.cos(wl * t)
 
         return q
+    
 
 
 class TrajGeneration(Node):
-    def __init__(self, node_name = "para_estimatior", dt_ = 5.0, N_ = 100,gravity_vector=[4.905, 0.0, -8.496]) -> None:
+    def __init__(self, node_name = "para_estimatior", 
+                 dt_ = 5.0, 
+                 N_ = 100,
+                 gravity_vector=[4.905, 0.0, -8.496]
+                 ) -> None:
         super().__init__(node_name=node_name)
 
-        self.dt_ = dt_
+        # self.dt_ = dt_
         self.declare_parameter("model", "med7")
         self.model_ = str(self.get_parameter("model").value)
         path = os.path.join(
@@ -109,15 +126,20 @@ class TrajGeneration(Node):
             self.model_,
             f"{self.model_}.urdf.xacro",
         )
-        self.N = N_
+        # self.N = N_
         gv = gravity_vector
+        self.initial_model_params(path, gv)
+
+        
 
         # 1. Get the kinematic parameters of every joints
+       
+    
+    def initial_model_params(self, path, gv):
         self.robot = optas.RobotModel(
             xacro_filename=path,
             time_derivs=[1],  # i.e. joint velocity
         )
-
 
         Nb, xyzs, rpys, axes = getJointParametersfromURDF(self.robot)
         self.dynamics_ = RNEA_function(Nb,1,rpys,xyzs,axes,gravity_para=cs.DM(gv))
@@ -137,8 +159,8 @@ class TrajGeneration(Node):
         
         Inertia = [link.inertial.inertia.to_matrix() for link in robot.links if link.inertial is not None]
         self.Inertia_np = np.hstack(tuple(Inertia[1:]))
-        
-       
+
+
     
     @ staticmethod
     def readCsvToList(path):
@@ -218,7 +240,7 @@ class TrajGeneration(Node):
             )
 
         points = get_convex_hull(path_pos)
-        # print("points", points)
+        print("points", points)
         # raise Exception("Run to here")
         str_prefix = "lbr_"
         vfs_fun = []
@@ -259,6 +281,8 @@ class TrajGeneration(Node):
             for j in range(len(vfs_fun)):
                 pfun_list.append(vfs_fun[j](q))
 
+            # print("pfun_list = ",pfun_list)
+
 
             Y_.append(Y_temp)
             Y_fri.append(fri_)
@@ -295,6 +319,8 @@ class TrajGeneration(Node):
         # ab_sq_ineq4 = []
         for i in range(7):
             for l in range(5):
+
+                # 这里面有变量不对劲k
                 print("iter {0}, {1}".format(i, l))
                 a_eq1[i] = a_eq1[i] + a[l,i]/(l+1)
                 b_eq1[i] = b_eq1[i] + b[l,i]
@@ -331,8 +357,8 @@ class TrajGeneration(Node):
             ubg4.append(q_max[i])
             ubg5.append(q_vmax[i])
 
-        g = cs.vertcat(*(a_eq1+  a_eq2+  b_eq1+  ab_sq_ineq1+ ab_sq_ineq2 + ab_sq_ineq3 +pfun_list))
-        lbg = cs.vertcat(*(lbg1,lbg2,lbg3,lbg4,lbg5,lbg6, [0.0]*len(pfun_list)))
+        g = cs.simplify(cs.vertcat(*(a_eq1+  a_eq2+  b_eq1+  ab_sq_ineq1+ ab_sq_ineq2 + ab_sq_ineq3 +pfun_list)))
+        lbg = cs.vertcat(*(lbg1,lbg2,lbg3,lbg4,lbg5,lbg6, [-1.0]*len(pfun_list)))
         ubg = cs.vertcat(*(ubg1,ubg2,ubg3,ubg4,ubg5,ubg6, [1e10]*len(pfun_list)))
 
 
@@ -352,13 +378,13 @@ class TrajGeneration(Node):
         g_fun = optas.Function('gf',[a,b],[g])
 
         G_max = 1# 
-        values_f_min = 10e10
+        values_f_min = 10e25
         eps = 0.03
 
-        init_x0_best = -eps*np.ones((1,2*Rank*7)) +  2* eps* np.random.random (size= (1,2*Rank*7))
+        # init_x0_best = -eps*np.ones((1,2*Rank*7)) +  2* eps* np.random.random (size= (1,2*Rank*7))
         reject_sample = 100
 
-        problem = {'x': x,'f':f, 'g': g}
+        problem = {'x': x,'f':f1, 'g': g}
         S = cs.nlpsol('S', 'ipopt', problem,
                       {'ipopt':{'max_iter':50000 }, 
                        'verbose':False,
@@ -371,7 +397,24 @@ class TrajGeneration(Node):
                        'verbose':False,
                        "ipopt.hessian_approximation":"limited-memory"
                        })
+        _x0_best = None
+        # print("contains_nan = ")
+        # print("g_data kkk = ",kkk)
+        # print("g_data = ",g[kkk:])
+        x_sample_temp = eps* np.random.random (size= (1,2*Rank*7))
+        init_x0 = copy.deepcopy(x_sample_temp)
+        a_init, b_init =  np.split(x_sample_temp.reshape(2*Rank,7),2)
+        g_data = g_fun(a_init, b_init)
+        contains_nan(g_data)
+        print("a_eq1 = ",len(a_eq1))
+        print("a_eq2 = ",len(a_eq2))
+        print("b_eq1 = ",len(b_eq1))
+        print("ab_sq_ineq1 = ",len(ab_sq_ineq1))
+        print("ab_sq_ineq2 = ",len(ab_sq_ineq2))
+        print("ab_sq_ineq3 = ",len(ab_sq_ineq3))
+        # print("g_data = ",g_data[7:])
 
+        # raise ValueError("RUN TO HERE")
         for iter in range(G_max):
             for num in range(reject_sample):
                 x_sample_temp = eps* np.random.random (size= (1,2*Rank*7))
@@ -397,7 +440,8 @@ class TrajGeneration(Node):
 
             print("fc = ",eigenvalues)
             print("a = {0} \n b = {1}".format(a,b))
-            values_f = np.sqrt(eigenvalues[0]/eigenvalues[-1])
+            values_f = np.sqrt(eigenvalues[0]/np.abs(eigenvalues[-1]))
+            print("values_f = ",values_f)
 
 
             if values_f_min > values_f:
@@ -407,10 +451,13 @@ class TrajGeneration(Node):
                 values_f_min = values_f
                 if (values_f < 1000):
                     break
+        if(_x0_best is not None):
+            x_split1,x_split2 = cs.vertsplit(cs.reshape(_x0_best,(2*Rank,7)),Rank)
+            print("sol = {0}".format(_x0_best))
+        else:
+            print("Cannot finda a result!")
+            raise ValueError("Try another setup")
 
-        x_split1,x_split2 = cs.vertsplit(cs.reshape(_x0_best,(2*Rank,7)),Rank)
-
-        print("sol = {0}".format(_x0_best))
         return x_split1.full(),x_split2.full(),fc
     
     def get_optimization_problem(self,Ff, sampling_rate, Rank=5, 
@@ -562,8 +609,8 @@ class TrajGeneration(Node):
             ubg5.append(q_vmax[i])
 
         g = cs.vertcat(*(a_eq1+  a_eq2+  b_eq1+  ab_sq_ineq1+ ab_sq_ineq2 + ab_sq_ineq3 +pfun_list))
-        lbg = cs.vertcat(*(lbg1,lbg2,lbg3,lbg4,lbg5,lbg6, [0.0]*len(pfun_list)))
-        ubg = cs.vertcat(*(ubg1,ubg2,ubg3,ubg4,ubg5,ubg6, [1e10]*len(pfun_list)))
+        lbg = cs.vertcat(*(lbg1,lbg2,lbg3,lbg4,lbg5,lbg6, [-10.0]*len(pfun_list)))
+        ubg = cs.vertcat(*(ubg1,ubg2,ubg3,ubg4,ubg5,ubg6, [1e30]*len(pfun_list)))
 
 
         A = Y.T @ Y
@@ -1131,12 +1178,57 @@ class TrajGeneration(Node):
 
 
 
+class TrajGenerationUsrPath(TrajGeneration):
+    def __init__(self, 
+                 path=None,
+                 node_name = "para_estimatior", 
+                 dt_ = 5.0, 
+                 N_ = 100,
+                 gravity_vector=[4.905, 0.0, -8.496],
+                 ) -> None:
+        Node.__init__(self, node_name=node_name)
+
+        if(path is None):
+            raise ValueError("This Class need a pathdefine")
+
+
+        # self.dt_ = dt_
+
+        # self.declare_parameter("model", "med7")
+        # self.model_ = str(self.get_parameter("model").value)
+        # path = os.path.join(
+        #     get_package_share_directory("lbr_description"),
+        #     "urdf",
+        #     self.model_,
+        #     f"{self.model_}.urdf.xacro",
+        # )
+        # self.N = N_
+        _path = path
+        gv = gravity_vector
+        self.initial_model_params(_path, gv)
 
 
 
 def mainO(args=None):
     rclpy.init(args=args)
-    paraEstimator = TrajGeneration()
+
+    path_xarm = os.path.join(
+            get_package_share_directory("xarm_description"),
+            "urdf",
+            "xarm7",
+            "xarm7base.urdf.xacro",
+        )
+    
+    # path_xarm = os.path.join(
+    #         get_package_share_directory("lbr_description"),
+    #         "urdf",
+    #         "med7",
+    #         "med7.urdf.xacro",
+    #     )
+    
+    # print("path_xarm = ",path_xarm)
+
+    paraEstimator = TrajGenerationUsrPath(path=path_xarm, gravity_vector=[0,0,-9.81])
     Ff = 0.1
     sampling_rate = 100.0
     sampling_rate_inoptimization = 20.0
@@ -1144,7 +1236,9 @@ def mainO(args=None):
     theta1 = 0.0
     theta2 = -0.5233
 
-    a,b,fc = paraEstimator.generate_opt_traj_Link(Ff = Ff,sampling_rate = sampling_rate_inoptimization, bias = [theta1, theta2, 0.0, 0.0, 0.0, 0.0, 0.0])
+    # a,b,fc = paraEstimator.generate_opt_traj_Link(Ff = Ff,sampling_rate = sampling_rate_inoptimization, bias = [0, 0, 0.0, 1.9, 0.0, 1.0, 0.0],q_min=[-6.2, -2.0, -6.2, -0.19, -6.2, -1.69, -6.2],q_max=[6.2, 2.0, 6.2, 3.94, 6.2, 3.14, 6.2])
+    a,b,fc = paraEstimator.generate_opt_traj_Link(Ff = Ff,sampling_rate = sampling_rate_inoptimization, bias = [0, 0, 0.0, 0.0, 0.0, 1.0, 0.0],q_min=[-6.2, -12.0, -16.2, -10.19, -16.2, -11.69, -16.2],q_max=[6.2, 12.0, 16.2, 13.94, 16.2, 13.14, 16.2])
+    # a,b,fc = paraEstimator.generate_opt_traj_Link(Ff = Ff,sampling_rate = sampling_rate_inoptimization)
     print("a = {0} \n b = {1}".format(a,b))
 
     ret = paraEstimator.generateToCsv(a,b,Ff = Ff,sampling_rate=sampling_rate)
