@@ -40,7 +40,7 @@ install(
 )
 
 install(
-  DIRECTORY src/test src/resources
+  DIRECTORY src/test src/resources urdf
   DESTINATION share/${PROJECT_NAME}
 )
 

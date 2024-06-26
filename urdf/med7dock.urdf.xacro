@@ -1,0 +1,70 @@
+<?xml version="1.0"?>
+
+<!-- top level -->
+<robot name="med7dock" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+    <!-- include the lbr med macro -->
+    <xacro:include
+        filename="$(find lbr_description)/urdf/med7/med7.xacro" />
+
+    <xacro:arg name="robot_name" default="lbr" />
+    <!-- <xacro:arg name="base_frame" default="base_frame" /> -->
+    <!-- <xacro:arg name="port_id" default="30200" /> -->
+    <xacro:arg name="sim" default="true" />
+
+    <!-- fix to world -->
+    <link name="world" />
+    <!-- <link name="world" /> -->
+    <joint name="$(arg robot_name)_joint" type="fixed">
+        <parent link="world" />
+        <child link="link_0" />
+    </joint>
+
+    <!-- add med7 robot -->
+    <!-- <xacro:med7 robot_name="$(arg robot_name)" port_id="$(arg port_id)" sim="$(arg sim)" /> -->
+    <!-- <xacro:med7 base_frame="world" robot_name="$(arg robot_name)" sim="$(arg sim)" /> -->
+   
+    <!-- add end-effector -->
+    <joint name="med7_dock_joint" type="fixed">
+        <parent link="link_ee" />
+        <child link="end_effector" />
+        <origin xyz="0 0 0" rpy="0 0 0" />
+    </joint>
+
+    <link name="link_ee">
+        <inertial>
+        <origin rpy="0 0 0" xyz="3.1218274599808524e-06 -1.6358155634513969e-06 0.013782295521067356"/>
+        <mass value="0.250107"/>
+        <inertia ixx="0.000165" ixy="0.000000" ixz="-0.000000" iyy="0.000165" iyz="0.000000" izz="0.000288"/>
+        </inertial>
+    </link>
+    <link name="end_effector">
+    <!-- <inertial>
+      <origin rpy="0 0 0" xyz="3.1218274599808524e-06 -1.6358155634513969e-06 0.013782295521067356"/>
+      <mass value="0.250107"/>
+      <inertia ixx="0.000165" ixy="0.000000" ixz="-0.000000" iyy="0.000165" iyz="0.000000" izz="0.000288"/>
+    </inertial> -->
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="package://med7_dock_description/meshes/EndEffector.STL" />
+            </geometry>
+            <material name="silver" />
+        </visual>
+        <collision>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="package://med7_dock_description/meshes/EndEffector.STL" />
+            </geometry>
+        </collision>
+    </link>
+
+    <joint name="joint_shaft" type="fixed">
+        <parent link="end_effector" />
+        <child link="link_shaft" />
+        <origin xyz="0 0 0.07" rpy="3.14159 -1.5708 3.14159" />
+        <!-- <origin xyz="0 0 0.07" rpy="3.14159 -1.5708 0" /> -->
+    </joint>
+
+    <link name="link_shaft" />
+</robot>

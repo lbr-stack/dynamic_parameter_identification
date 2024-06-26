@@ -1213,9 +1213,9 @@ def mainO(args=None):
     rclpy.init(args=args)
 
     path_xarm = os.path.join(
-            get_package_share_directory("xarm_description"),
+            get_package_share_directory("gravity_compensation"),
             "urdf",
-            "xarm7",
+            "xarm",
             "xarm7base.urdf.xacro",
         )
     
@@ -1223,7 +1223,13 @@ def mainO(args=None):
     #         get_package_share_directory("lbr_description"),
     #         "urdf",
     #         "med7",
-    #         "med7.urdf.xacro",
+    #         "med7.xacro",
+    #     )
+
+    # path_xarm = os.path.join(
+    #         get_package_share_directory("gravity_compensation"),
+    #         "urdf",
+    #         "med7dock.urdf.xacro",
     #     )
     
     # print("path_xarm = ",path_xarm)
