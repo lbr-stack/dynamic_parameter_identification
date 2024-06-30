@@ -36,6 +36,7 @@ install(
     src/convexhallExtraction.py
     src/test_model.py
     src/MetaGen.py
+    src/examples/lbr_traj_gen.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

@@ -13,24 +13,14 @@
     <xacro:arg name="sim" default="true" />
 
     <!-- fix to world -->
-    <link name="world" />
+    <xacro:macro name="extend_link_ee" params="">
     <!-- <link name="world" /> -->
-    <joint name="$(arg robot_name)_joint" type="fixed">
+    <!-- <link name="world" /> -->
+    <!-- <joint name="$(arg robot_name)_joint" type="fixed">
         <parent link="world" />
         <child link="link_0" />
-    </joint>
-
-    <!-- add med7 robot -->
-    <!-- <xacro:med7 robot_name="$(arg robot_name)" port_id="$(arg port_id)" sim="$(arg sim)" /> -->
-    <!-- <xacro:med7 base_frame="world" robot_name="$(arg robot_name)" sim="$(arg sim)" /> -->
-   
-    <!-- add end-effector -->
-    <joint name="med7_dock_joint" type="fixed">
-        <parent link="link_ee" />
-        <child link="end_effector" />
-        <origin xyz="0 0 0" rpy="0 0 0" />
-    </joint>
-
+    </joint> -->
+    
     <link name="link_ee">
         <inertial>
         <origin rpy="0 0 0" xyz="3.1218274599808524e-06 -1.6358155634513969e-06 0.013782295521067356"/>
@@ -38,6 +28,14 @@
         <inertia ixx="0.000165" ixy="0.000000" ixz="-0.000000" iyy="0.000165" iyz="0.000000" izz="0.000288"/>
         </inertial>
     </link>
+    
+
+    <joint name="med7_dock_joint" type="fixed">
+        <parent link="link_ee" />
+        <child link="end_effector" />
+        <origin xyz="0 0 0" rpy="0 0 0" />
+    </joint>
+    
     <link name="end_effector">
     <!-- <inertial>
       <origin rpy="0 0 0" xyz="3.1218274599808524e-06 -1.6358155634513969e-06 0.013782295521067356"/>
@@ -67,4 +65,9 @@
     </joint>
 
     <link name="link_shaft" />
+    </xacro:macro>
+
+    <!-- <xacro:med7 robot_name="$(arg robot_name)" port_id="$(arg port_id)" sim="$(arg sim)" /> -->
+    <!-- <xacro:med7  robot_name="$(arg robot_name)" sim="$(arg sim)" /> -->
+    <xacro:extend_link_ee/>
 </robot>

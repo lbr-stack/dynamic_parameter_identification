@@ -940,41 +940,7 @@ class TrajGeneration(Node):
 
         values_list,keys = self.generateToList(a, b, Ff, sampling_rate)
 
-        # fourierInstance1 = FourierSeries(ff = Ff)
-
-        # cs_a = cs.SX.sym('ca', 5,7)
-        # cs_b = cs.SX.sym('cb', 5,7)
-        # t = cs.SX.sym('tt', 1)
-
-        # fourierF = fourierInstance1.FourierFunction(t, cs_a, cs_b,'f2')
-
-        # fourier = fourierF(cs_a,cs_b,t)
-
-        # fourierDot = [optas.jacobian(fourier[i],t) for i in range(len(fourier))]
-        # _fDot = optas.Function('fund',[cs_a,cs_b,t],fourierDot)
-        # # fourierDDot = [optas.jacobian(fourierDot[i],t) for i in range(len(fourierDot))]
-
-        # pointsNum = int(sampling_rate/Ff)
-        # Ts = 1.0/Ff
-
-        # keys = ["lbr_A0", "lbr_A1", "lbr_A2", "lbr_A3", "lbr_A4", "lbr_A5", "lbr_A6",
-        #         "lbr_A0v", "lbr_A1v", "lbr_A2v", "lbr_A3v", "lbr_A4v", "lbr_A5v", "lbr_A6v"]
-        # keys = ["time_stamps"] + keys
-        # values_list = []
-        # for k in range(pointsNum):
-        #     tc = 1.0/(sampling_rate) * k
-        #     # f = fourierF(np.asarray(a),np.asarray(b),tc)
-        #     # f = _f(tc)
-        #     # print("b = {0}".format(b))
-        #     f_temp =fourierInstance1.FourierValue(a,b,scale*tc)
-        #     # print("f_temp = {0}".format(f_temp))
-        #     fd_temp=_fDot(np.asarray(a),np.asarray(b),scale*tc)
-            
-        #     q_list = [float(id) for id in f_temp]#fourier(a,b,tc)
-        #     qd_list = [float(id) for id in fd_temp] #fourierDot(a,b,tc)
-
-        #     values_list.append([tc]+q_list + qd_list)
-        #     # if os.path.isfile(path1):
+        
         with open(path1,"w") as csv_file:
             self.save_(csv_file,keys,values_list)
 
