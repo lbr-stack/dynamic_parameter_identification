@@ -30,8 +30,7 @@ def main(args=None):
             "med",
             "med7dock.urdf.xacro",
         )
-    
-    # print("path_xarm = ",path_xarm)
+
 
     paraEstimator = TrajGenerationUsrPath(path=path_xarm, gravity_vector=[0,0,-9.81])
     Ff = 0.1

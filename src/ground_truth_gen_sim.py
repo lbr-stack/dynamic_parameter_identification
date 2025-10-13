@@ -53,7 +53,12 @@ def main(args=None):
     sampling_rate = 100.0
     sampling_rate_inoptimization = 20.0
 
-    file_name = "med7dock.urdf"
+    file_name = os.path.join(
+            get_package_share_directory("gravity_compensation"),
+            "urdf",
+            "med",
+            "med7dock.urdf"
+        )
     paths = [
         os.path.join(
             get_package_share_directory("med7_dock_description")

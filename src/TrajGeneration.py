@@ -23,6 +23,7 @@ import math
 import copy
 from convexhallExtraction import get_convex_hull
 import random
+import warnings
 
 from IDmodel import TD_2order, find_dyn_parm_deps, RNEA_function,DynamicLinearlization,getJointParametersfromURDF
 
@@ -32,6 +33,27 @@ def contains_nan(x):
             print("NAN occured on ", i)
             return True
     return False
+
+
+def save_to_csv(values_list, filename):
+    # 打开文件，准备写入
+    directory = os.path.dirname(filename)
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+    with open(filename, mode='w', newline='') as file:
+        writer = csv.writer(file)
+        # 写入二维列表到CSV文件
+        writer.writerows(values_list)
+    print(f"Data saved to {filename}")
+
+def load_from_csv(filename):
+    with open(filename, mode='r') as file:
+        reader = csv.reader(file)
+        # 将读取的数据转换为二维列表
+        loaded_list = [list(map(float, row)) for row in reader]
+    return loaded_list
+
+
 
 
 def getConstraintsinJointSpace(robot,point_coord = [0.]*3,Nb=7, base_link="link_3", base_joint_name="A3", ee_link="link_ee"):
@@ -64,7 +86,7 @@ def getConstraintsinJointSpace(robot,point_coord = [0.]*3,Nb=7, base_link="link_
     a = 0.15
     b = 0.15
 
-    print("c = ",c)
+    # print("c = ",c)
     EpVF = x*x/(a*a) + y*y/(b*b) + (z-c)*(z-c)/(c*c)-1
 
     # constraints = optas.
@@ -209,6 +231,11 @@ class TrajGeneration(Node):
                           q_min=-2.0*np.ones(7), q_max =2.0*np.ones(7),
                           q_vmin=-8.0*np.ones(7),q_vmax=8.0*np.ones(7),
                           f_path = None, g_path=None,bias=[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]):
+        warnings.warn(
+            "The 'deprecated_method' is deprecated and will be removed in a future version.",
+            DeprecationWarning,
+            stacklevel=2
+        )
 
         Pb, Pd, Kd =find_dyn_parm_deps(7,80,self.Ymat)
         K = Pb.T +Kd @Pd.T
@@ -260,7 +287,7 @@ class TrajGeneration(Node):
             # print("q_np = {0}".format(q_np))
             # q_np = np.random.uniform(-1.5, 1.5, size=7)
             tc = 1.0/(sampling_rate) * k
-            print("tc = ",tc)
+            # print("tc = ",tc)
             
             q_list = [optas.substitute(id, t, tc) for id in fourier]#fourier(a,b,tc)
             qd_list = [optas.substitute(id, t, tc) for id in fourierDot] #fourierDot(a,b,tc)
@@ -320,8 +347,6 @@ class TrajGeneration(Node):
         for i in range(7):
             for l in range(5):
 
-                # 这里面有变量不对劲k
-                print("iter {0}, {1}".format(i, l))
                 a_eq1[i] = a_eq1[i] + a[l,i]/(l+1)
                 b_eq1[i] = b_eq1[i] + b[l,i]
                 a_eq2[i] = a_eq2[i] + a[l,i]*(l+1)
@@ -460,94 +485,14 @@ class TrajGeneration(Node):
 
         return x_split1.full(),x_split2.full(),fc
     
-    def get_optimization_problem(self,Ff, sampling_rate, Rank=5, 
-                          q_min=-3.0*np.ones(7), q_max =3.0*np.ones(7),
-                          q_vmin=-6.0*np.ones(7),q_vmax=6.0*np.ones(7),
-                          f_path = None, g_path=None,bias=[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]):
-
-        Pb, Pd, Kd =find_dyn_parm_deps(7,80,self.Ymat)
-        K = Pb.T +Kd @Pd.T
-
-        
-        # sampling_rate = 0.1
-        pointsNum = int(sampling_rate/(Ff))
-        print("pointsNum",pointsNum)
-        # raise ValueError("run to here")
-
-        fourierInstance = FourierSeries(ff = Ff,bias=bias)
-
-        a = cs.SX.sym('a', Rank,7)
-        b = cs.SX.sym('b', Rank,7)
-        t = cs.SX.sym('t', 1)
-
-        fourierF = fourierInstance.FourierFunction(t, a, b,'f1')
-        fourier = fourierF(a,b,t)
-
-        fourierDot = [optas.jacobian(fourier[i],t) for i in range(len(fourier))]
-        fourierDDot = [optas.jacobian(fourierDot[i],t) for i in range(len(fourierDot))]
-
-        print(fourierDot)
-
-        path_pos = os.path.join(
-                get_package_share_directory("med7_dock_description"),
-                "meshes",
-                "EndEffector.STL",
-            )
-
-        points = get_convex_hull(path_pos)
-        # print("points", points)
-        # raise Exception("Run to here")
-        str_prefix = "lbr_"
-        vfs_fun = []
-
-        for point in points:
-            for i in range(2,6):
-                vfs_fun.append(getConstraintsinJointSpace(self.robot, point_coord=point, 
-                                           base_link="link_"+str(i),
-                                           base_joint_name="A"+str(i)
-                                           ))
-
-
-        Y_ = []
-        Y_fri = []
-        pfun_list = []
-        for k in range(pointsNum):
-            # print("q_np = {0}".format(q_np))
-            # q_np = np.random.uniform(-1.5, 1.5, size=7)
-            tc = 1.0/(sampling_rate) * k
-            print("tc = ",tc)
-            
-            q_list = [optas.substitute(id, t, tc) for id in fourier]#fourier(a,b,tc)
-            qd_list = [optas.substitute(id, t, tc) for id in fourierDot] #fourierDot(a,b,tc)
-            qdd_list = [optas.substitute(id, t, tc) for id in fourierDDot]#fourierDDot(a,b,tc)
-            q = cs.vertcat(*q_list)
-            qd = cs.vertcat(*qd_list)
-            qdd = cs.vertcat(*qdd_list)
-
-
-            Y_temp = self.Ymat(q,
-                               qd,
-                               qdd) @Pb
-            #[cs.sign(item) for item in qd_list])
-            fri_ = cs.diag(cs.sign(qd))
-            fri_ = cs.horzcat(fri_,  cs.diag(qd))
-            
-
-            for j in range(len(vfs_fun)):
-                pfun_list.append(vfs_fun[j](q))
-
-
-            Y_.append(Y_temp)
-            Y_fri.append(fri_)
-
-        Y_r = optas.vertcat(*Y_)
-        Y_fri1 = optas.vertcat(*Y_fri)
-
-        Y = Y_r
-
-        # Y = cs.horzcat(Y_r, Y_fri1)
-
-        # print(Y)
+    def get_ineq_Fourier_expression(self,Ff,
+                            a,
+                            b,
+                            q_min,
+                            q_max,
+                            q_vmin,
+                            q_vmax,
+                            ):
         a_eq1 = [0.0]*7
         a_eq2 = [0.0]*7
         b_eq1 = [0.0]*7
@@ -569,10 +514,8 @@ class TrajGeneration(Node):
         ubg4 = []
         ubg5 = []
         ubg6 = []
-        # ab_sq_ineq4 = []
         for i in range(7):
             for l in range(5):
-                print("iter {0}, {1}".format(i, l))
                 a_eq1[i] = a_eq1[i] + a[l,i]/(l+1)
                 b_eq1[i] = b_eq1[i] + b[l,i]
                 a_eq2[i] = a_eq2[i] + a[l,i]*(l+1)
@@ -608,46 +551,140 @@ class TrajGeneration(Node):
             ubg4.append(Ff* math.pi* 2.0  *q_max[i])
             ubg5.append(q_vmax[i])
 
-        g = cs.vertcat(*(a_eq1+  a_eq2+  b_eq1+  ab_sq_ineq1+ ab_sq_ineq2 + ab_sq_ineq3 +pfun_list))
-        lbg = cs.vertcat(*(lbg1,lbg2,lbg3,lbg4,lbg5,lbg6, [-10.0]*len(pfun_list)))
-        ubg = cs.vertcat(*(ubg1,ubg2,ubg3,ubg4,ubg5,ubg6, [1e30]*len(pfun_list)))
+
+        g = cs.vertcat(*(a_eq1+  a_eq2+  b_eq1+  ab_sq_ineq1+ ab_sq_ineq2 + ab_sq_ineq3 ))
+        lbg = cs.vertcat(*(lbg1,lbg2,lbg3,lbg4,lbg5,lbg6))
+        ubg = cs.vertcat(*(ubg1,ubg2,ubg3,ubg4,ubg5,ubg6))
+    
+        return g, lbg, ubg
+    
+    def get_Y_matrix(self,
+                     q_list,
+                     qd_list,
+                     qdd_list):
+        
+        #  Least Inertia Set
+        Pb, _, __ =find_dyn_parm_deps(self.robot.ndof,80,self.Ymat)
+
+        Y_ = []
+        Y_fri = []
+
+        for q, qd, qdd in zip(q_list, qd_list, qdd_list):
+            Y_temp = self.Ymat(q,
+                               qd,
+                               qdd) @Pb
+            fri_ = cs.diag(cs.sign(qd))
+            fri_ = cs.horzcat(fri_,  cs.diag(qd))
+
+            Y_.append(Y_temp)
+            Y_fri.append(fri_)
+
+        Y1= optas.vertcat(*Y_)
+        Y_fri1 = optas.vertcat(*Y_fri)
+
+        # consider friction term
+        Y = optas.horzcat(Y1,Y_fri1)
+
+        return Y
+    
+    def get_optimization_problem(self,Ff, sampling_rate, Rank=5, 
+                          q_min=-3.0*np.ones(7), q_max =3.0*np.ones(7),
+                          q_vmin=-6.0*np.ones(7),q_vmax=6.0*np.ones(7),
+                          f_path = None, g_path=None,bias=[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]):
 
 
+        # 1. define the symbolic parameters
+        a = cs.SX.sym('a', Rank,7)
+        b = cs.SX.sym('b', Rank,7)
+        t = cs.SX.sym('t', 1)
+
+
+        # 2. Setup Fourier Series to model Y
+        """ Note: Ff decides the cycle time of the Traj.
+            Make Ff smaller, T will be longer
+        """
+        fourierInstance = FourierSeries(ff = Ff,bias=bias)
+        fourierF = fourierInstance.FourierFunction(t, a, b,'f1')
+        fourier = fourierF(a,b,t)
+
+        fourierDot = [optas.jacobian(fourier[i],t) for i in range(len(fourier))]
+        fourierDDot = [optas.jacobian(fourierDot[i],t) for i in range(len(fourierDot))]
+
+        ts = [1.0/(sampling_rate)*k for k in range(int(sampling_rate/(Ff)))]
+
+        q_list = []
+        qd_list = []
+        qdd_list = []
+        for tc in ts:
+            q_list.append(cs.vertcat(*[optas.substitute(id, t, tc) for id in fourier]))
+            qd_list.append(cs.vertcat(*[optas.substitute(id, t, tc) for id in fourierDot]))
+            qdd_list.append(cs.vertcat(*[optas.substitute(id, t, tc) for id in fourierDDot]))
+
+        # 3. Self-Collision Avoidance
+        path_pos = os.path.join(
+                get_package_share_directory("med7_dock_description"),
+                "meshes",
+                "EndEffector.STL",
+            )
+
+        points = get_convex_hull(path_pos)
+        vfs_fun = []
+        for point in points:
+            for i in range(2,6):
+                vfs_fun.append(getConstraintsinJointSpace(self.robot, point_coord=point, 
+                                           base_link="link_"+str(i),
+                                           base_joint_name="A"+str(i)
+                                           ))     
+        pfun_list = []
+        for q in q_list:
+            for j in range(len(vfs_fun)):
+                pfun_list.append(vfs_fun[j](q))
+
+        Y = self.get_Y_matrix(q_list,
+                              qd_list,
+                              qdd_list)
+        
         A = Y.T @ Y
-        # print("Y = {0}".format(Y.shape))
         A_inv = cs.inv(A)
 
-        f1 = cs.simplify(1.0*cs.norm_fro(A) * cs.norm_fro(A_inv))
+
+
+        g, lbg, ubg = self.get_ineq_Fourier_expression(
+                        Ff, a,b,
+                        q_min,q_max,
+                        q_vmin,q_vmax
+                    )
+        g = cs.vertcat(g, *pfun_list)
+        lbg = cs.vertcat(lbg, *([0.0]*len(pfun_list)))
+        ubg = cs.vertcat(ubg, *([1e30]*len(pfun_list)))
+
+        # f1 = cs.simplify(1.0*cs.norm_fro(A) * cs.norm_fro(A_inv))
         f = cs.simplify(1.0*cs.norm_fro(A) + cs.norm_fro(A_inv))
         x = cs.reshape(cs.vertcat(a,b),(1, 2*Rank*7))
-        # fout = objective(a,b)
+ 
+        fc = optas.Function('fc',[a,b],[A])
         
 
-        fc = optas.Function('fc',[a,b],[A])
-        f_fun = optas.Function('ff',[a,b],[f])
-        # _f_fun = optas.Function('f_ffc',[a,b],[_f])
-        g_fun = optas.Function('gf',[a,b],[g])
-
-        G_max = 1# 
-        values_f_min = 10e10
-        eps = 0.03
-
-        init_x0_best = -eps*np.ones((1,2*Rank*7)) +  2* eps* np.random.random (size= (1,2*Rank*7))
-        reject_sample = 100
+        opts = {
+            'ipopt': {
+                'max_iter': 1000,  
+                'tol': 1e-8, 
+                'acceptable_tol': 1e-6,  
+                'acceptable_iter': 50, 
+                'linear_solver': 'mumps',  # or 'ma57', 'ma26'
+                'mu_strategy': 'adaptive',  
+                'dual_inf_tol': 1e-8,  
+                'compl_inf_tol': 1e-8,  
+                'bound_relax_factor': 0,  
+                'hessian_approximation': 'limited-memory',  # quasi-Newton
+            },
+            'verbose': False,  
+        }
 
         problem = {'x': x,'f':f, 'g': g}
-        S = cs.nlpsol('S', 'ipopt', problem,
-                      {'ipopt':{'max_iter':50000 }, 
-                       'verbose':False,
-                       "ipopt.hessian_approximation":"limited-memory"
-                       })
+        S = cs.nlpsol('S', 'ipopt', problem, opts)
         
-        # problem1 = {'x': x,'f':f1, 'g': g}
-        # S1 = cs.nlpsol('S', 'ipopt', problem1,
-        #               {'ipopt':{'max_iter':50000 }, 
-        #                'verbose':False,
-        #                "ipopt.hessian_approximation":"limited-memory"
-        #                })
+ 
         return S,lbg,ubg,fc
     
     def find_optimal_point_with_start(self, S,lbg, ubg , Rank=5,x_sample_temp = eps* np.random.random (size= (1,70))):
@@ -663,7 +700,6 @@ class TrajGeneration(Node):
     
     def find_optimal_point_with_randomstart(self, S,lbg, ubg , Rank=5):
         eps = 0.03
-        
         x_sample_temp = eps* np.random.random (size= (1,70))
 
         return self.find_optimal_point_with_start(S,lbg, ubg , Rank,x_sample_temp)
@@ -676,47 +712,6 @@ class TrajGeneration(Node):
 
 
 
-        # for iter in range(G_max):
-        #     for num in range(reject_sample):
-        #         x_sample_temp = eps* np.random.random (size= (1,2*Rank*7))
-        #         init_x0 = copy.deepcopy(x_sample_temp)
-        #         a_init, b_init =  np.split(x_sample_temp.reshape(2*Rank,7),2)
-        #         g_data = g_fun(a_init, b_init)
-
-        #         if(np.all(g_data < ubg) and np.all(g_data > lbg)):
-        #             print("Find a initial solution here")
-        #             break
-        #     init_x0 = copy.deepcopy(x_sample_temp)
-        #     a_init, b_init =  np.split(x_sample_temp.reshape(2*Rank,7),2)
-
-        #     for k in range(1):
-        #         sol = S(x0 = init_x0,lbg = lbg, ubg = ubg)
-        #         # sol = S1(x0 = sol['x'],lbg = lbg, ubg = ubg)
-        #         init_x0 = sol['x']
-
-        #     a_, b_ =  cs.vertsplit(cs.reshape(sol['x'],(2*Rank,7)),Rank)
-        #     # values_f = f_fun(a_, b_)
-
-        #     eigenvalues, eigenvectors = np.linalg.eig(fc(a_,b_))
-
-        #     print("fc = ",eigenvalues)
-        #     print("a = {0} \n b = {1}".format(a,b))
-        #     values_f = np.sqrt(eigenvalues[0]/eigenvalues[-1])
-
-
-        #     if values_f_min > values_f:
-
-        #         print(" find a better value = {0}".format(values_f))
-        #         _x0_best = sol['x']
-        #         values_f_min = values_f
-        #         if (values_f < 1000):
-        #             break
-
-        # x_split1,x_split2 = cs.vertsplit(cs.reshape(_x0_best,(2*Rank,7)),Rank)
-
-        # print("sol = {0}".format(_x0_best))
-        # return x_split1.full(),x_split2.full(),fc
-        
     
     def generate_opt_traj(self,Ff, sampling_rate, Rank=5, 
                           q_min=-1.0*np.ones(7), q_max =3.0*np.ones(7),
@@ -773,7 +768,7 @@ class TrajGeneration(Node):
             # print("q_np = {0}".format(q_np))
             # q_np = np.random.uniform(-1.5, 1.5, size=7)
             tc = 1.0/(sampling_rate) * k
-            print("tc = ",tc)
+            # print("tc = ",tc)
             
             q_list = [optas.substitute(id, t, tc) for id in fourier]#fourier(a,b,tc)
             qd_list = [optas.substitute(id, t, tc) for id in fourierDot] #fourierDot(a,b,tc)
@@ -831,7 +826,7 @@ class TrajGeneration(Node):
         # ab_sq_ineq4 = []
         for i in range(7):
             for l in range(5):
-                print("iter {0}, {1}".format(i, l))
+                # print("iter {0}, {1}".format(i, l))
                 a_eq1[i] = a_eq1[i] + a[l,i]/(l+1)
                 b_eq1[i] = b_eq1[i] + b[l,i]
                 a_eq2[i] = a_eq2[i] + a[l,i]*(l+1)
